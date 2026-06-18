@@ -3,6 +3,8 @@
 -- Define a short subject, then put it through the classic phrase transforms.
 -- Each binding below is a Music value; `main` strings three of them together.
 
+#load "prelude"
+
 subject = c' d' e' g'
 
 higher    = transpose P5 subject   -- shift the whole phrase up a perfect fifth

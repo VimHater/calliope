@@ -48,6 +48,19 @@ void run_typecheck_tests() {
     CHECK_EQ_STR(type_of("main = semitones (c' ^+ P5)", "main"), "Int");
     CHECK_EQ_STR(type_of("main = c d e", "main"), "Music");
 
+    // `:+:` / `:=:` compose via the builtin Phrase class: bare pitches lift,
+    // a wrapping function stays polymorphic, non-phrase operands are rejected.
+    CHECK_EQ_STR(type_of("main = c' :+: d'", "main"), "Music");
+    CHECK_EQ_STR(type_of("main = c' :=: (d e)", "main"), "Music");
+    CHECK_EQ_STR(type_of("fn x = x :+: x", "fn"), "Phrase t0 => t0 -> Music");
+    CHECK(has_type_error("main = 1 :+: 2"));       // no instance for Phrase Int
+
+    // `:*:` repeats a phrase n times:  Phrase t => t -> Int -> Music
+    CHECK_EQ_STR(type_of("main = (c d e) :*: 3", "main"), "Music");
+    CHECK_EQ_STR(type_of("main = c' :*: 2", "main"), "Music");
+    CHECK(has_type_error("main = 5 :*: 3"));       // left operand not a phrase
+    CHECK(has_type_error("main = (c d) :*: P5"));  // right operand not an Int
+
     // lists
     CHECK_EQ_STR(type_of("main = [1, 2, 3]", "main"), "[Int]");
 

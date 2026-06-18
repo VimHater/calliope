@@ -79,6 +79,7 @@ bool op_fixity(std::string_view op, int& prec, bool& right) {
     if (op == ":=:") { prec = 3; right = true;  return true; }
     if (op == ":")   { prec = 5; right = true;  return true; } // cons
     if (op == ":+:") { prec = 5; right = true;  return true; }
+    if (op == ":*:") { prec = 6; right = false; return true; } // repeat n times (phrase :*: n)
     if (op == "^+" || op == "^-") { prec = 6; right = false; return true; } // transpose
     if (op == "+" || op == "-") { prec = 6; right = false; return true; } // left-assoc
     if (op == "*" || op == "/") { prec = 7; right = false; return true; }
@@ -465,6 +466,8 @@ NodeId parse_expr(Parser& p, int min_prec) {
 // name params... = body  [where block]
 NodeId parse_binding(Parser& p, bool allow_where) {
     Token name = cur(p);
+    if (is_keyword(name.text))
+        error(p, "expected a name to bind, found a keyword");
     advance(p); // name (caller ensured this is an Ident)
     Node n;
     n.kind = NodeKind::Binding;

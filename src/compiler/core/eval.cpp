@@ -502,6 +502,15 @@ Value eval(Interp& I, NodeId id, const std::shared_ptr<Env>& env) {
             if (op == "|>") return apply(I, std::move(r), std::move(l)); // x |> f = f x
             if (op == ":+:") return music_value(I, music::seq(*I.music, to_music(I, l), to_music(I, r)));
             if (op == ":=:") return music_value(I, music::par(*I.music, to_music(I, l), to_music(I, r)));
+            if (op == ":*:") {
+                // phrase :*: n  —  n copies in a row (right-leaning, like `times`)
+                long long n = r.i;
+                music::MusicId base = to_music(I, l);
+                if (n < 1) { I.errors.push_back("(:*:): repeat count must be >= 1"); return music_value(I, base); }
+                music::MusicId acc = base;
+                for (long long k = 1; k < n; k++) acc = music::seq(*I.music, base, acc);
+                return music_value(I, acc);
+            }
             Value f;
             if (!lookup_operator(I, op, f)) {
                 I.errors.push_back("unknown operator: " + std::string(op));

@@ -1,0 +1,11 @@
+-- arithmetic.cal — no music at all, just numbers.
+--
+-- `main` does not have to be Music; while experimenting it can be any value.
+-- Here it is an Int, so `calliopei arithmetic.cal` prints a number.
+
+square x = x * x
+
+-- sum of 1 + 2 + ... + n  (recursion instead of a loop)
+sumTo n = if n == 0 then 0 else n + sumTo (n - 1)
+
+main = square 9 + sumTo 10      -- 81 + 55 = 136

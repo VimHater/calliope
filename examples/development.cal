@@ -3,6 +3,8 @@
 -- A fugal development: the subject sounded against its own melodic inversion,
 -- answered up a perfect fifth.  Reads the way a composer means it.
 
+#load "prelude"
+
 subject = c' d' e' g'
 
 development subj = subj `par` (invert subj ^+ P5)

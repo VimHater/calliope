@@ -1,10 +1,12 @@
 -- reverse-notes.cal — reverse a list of notes, then play them.
 --
--- `reverse`, `notes`, and `line` all come from the standard library
--- (standard_library/prelude.cal), which the compiler loads automatically.
+-- `reverse`, `notes`, and `line` all come from the standard library, brought
+-- into scope by the `#load "prelude"` directive below.
 --
 -- A list of pitches is just a [Pitch]; `notes` lifts them to [Music], and
 -- `line` plays a [Music] one after another.
+
+#load "prelude"
 
 melody = [c', d', e', f', g']
 

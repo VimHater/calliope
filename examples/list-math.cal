@@ -1,0 +1,13 @@
+#load "prelude"
+
+double x = x * 2
+
+-- n is even when integer-dividing by 2 and multiplying back gives n again
+isEven n = n / 2 * 2 == n
+
+-- add up a list of numbers
+total xs = foldr (\x running -> x + running) 0 xs
+
+-- keep the even numbers, double them, then sum the result
+main = total (map double (filter isEven [1, 2, 3, 4, 5, 6]))
+-- evens [2,4,6] -> doubled [4,8,12] -> 24

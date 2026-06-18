@@ -202,11 +202,6 @@ TypeId infer_pattern(Checker& ck, Env& env, NodeId patId) {
 
 // operator type for a BinOp token; returns NoType if unknown
 TypeId operator_type(Checker& ck, Env& env, std::string_view op) {
-    Ctx& c = ck.ctx;
-    if (op == ":+:" || op == ":=:") {
-        TypeId m = t_con0(c, "Music");
-        return t_arrow(c, m, t_arrow(c, m, m));
-    }
     Scheme s;
     if (env_find(env, op, s)) return instantiate(ck, s);
     return NoType;
@@ -536,6 +531,36 @@ void seed_builtins(Checker& ck, Env& env) {
     ck.classes.push_back({"Transposable", "a", {"^+", "^-"}});
     ck.instances.emplace_back("Transposable", "Pitch");
     ck.instances.emplace_back("Transposable", "Music");
+    // Phrase is a builtin single-parameter class: the things `:+:` / `:=:`
+    // compose. Instances Pitch and Music, so a bare pitch lifts to a one-note
+    // phrase (eval turns it into a note). The two operands may differ
+    // (`c :+: (d e)` is Pitch :+: Music), so each side is independently
+    // constrained and the result is always Music.
+    //   (:+:), (:=:) :: Phrase t => Phrase u => t -> u -> Music
+    for (const char* op : {":+:", ":=:"}) {
+        TypeId a = new_var(c); int av = c.pool[a].var;
+        TypeId b = new_var(c); int bv = c.pool[b].var;
+        Scheme s;
+        s.vars.push_back(av);
+        s.vars.push_back(bv);
+        s.type = t_arrow(c, a, t_arrow(c, b, t_con0(c, "Music")));
+        s.constraints.emplace_back("Phrase", av);
+        s.constraints.emplace_back("Phrase", bv);
+        env.push_back({op, s});
+    }
+    ck.classes.push_back({"Phrase", "a", {":+:", ":=:"}});
+    ck.instances.emplace_back("Phrase", "Pitch");
+    ck.instances.emplace_back("Phrase", "Music");
+    // `:*:` repeats a phrase n times in a row:  phrase :*: n
+    //   (:*:) :: Phrase t => t -> Int -> Music
+    {
+        TypeId a = new_var(c); int av = c.pool[a].var;
+        Scheme s;
+        s.vars.push_back(av);
+        s.type = t_arrow(c, a, t_arrow(c, t_con0(c, "Int"), t_con0(c, "Music")));
+        s.constraints.emplace_back("Phrase", av);
+        env.push_back({":*:", s});
+    }
     add_mono("semitones", t_arrow(c, t_con0(c, "Pitch"), t_con0(c, "Int")));
 
     // list axioms — polymorphic schemes (the stdlib is built on these):

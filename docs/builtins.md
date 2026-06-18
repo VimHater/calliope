@@ -15,11 +15,14 @@ including all music theory — is written in Calliope in the
 | `^+` `^-` | `Transposable t => t -> Interval -> t` | transpose; class method (see below) |
 | `:` | `a -> [a] -> [a]` | list cons (`x : xs`) |
 | `\|>` | `a -> (a -> b) -> b` | pipe: `x \|> f = f x` |
-| `:+:` | `Music -> Music -> Music` | sequential composition |
-| `:=:` | `Music -> Music -> Music` | parallel composition |
+| `:+:` | `Phrase t => Phrase u => t -> u -> Music` | sequential composition |
+| `:=:` | `Phrase t => Phrase u => t -> u -> Music` | parallel composition |
+| `:*:` | `Phrase t => t -> Int -> Music` | repeat a phrase n times in a row (`motif :*: 4`); binds tighter than `:+:`; `n >= 1` |
 
-`not :: Bool -> Bool` is a prefix function. `:+:`/`:=:` lift `Pitch` operands to
-notes automatically.
+`not :: Bool -> Bool` is a prefix function. `:+:`/`:=:` are methods of the builtin
+`Phrase` class (instances `Pitch` and `Music`): a bare `Pitch` operand lifts to a
+one-note phrase, so `c' :+: d'` is `Music`. A non-phrase operand (`1 :+: 2`) is a
+`no instance for Phrase Int` error.
 
 ## Transposition — the `Transposable` class
 

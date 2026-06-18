@@ -39,8 +39,16 @@ Frontend first cut exists; nothing executes music yet.
 - `src/compiler/compiler.cpp` — `calliope` compiler CLI: `--emit ir` (default)
   prints the Music IR to stdout; `midi`/`wav`/`mp3`/`mp4`/`musicxml` are stubs
   ("not implemented"). `--dump tokens|ast|types` for debug.
-- `src/compiler/interactive.cpp` — `calliope-repl`: minimal REPL (expression in,
-  value + type out, prelude in scope; `:type`, `:quit`).
+- `src/compiler/calliopei.cpp` — `calliopei`: the interpreter. `calliopei file.cal`
+  runs a file (prints `main`'s Music IR); `calliopei` with no args starts a REPL.
+  The REPL keeps a **session**: a line that parses as a definition (`x = …`, a
+  signature, `class`/`instance`) **or a `#` directive** (`#load "…"`) is remembered
+  and rejected if it doesn't compile; other lines are evaluated as expressions with
+  prelude + session in scope (value + type on one line; `:type`, `:quit`). Uses
+  plain `std::getline` — **readline (line editing + history) is a TODO**, to be done
+  with a cross-platform library (replxx / linenoise + Win32). `#load` paths resolve
+  cross-platform (`/` and `\\`) via `driver::directory_of` / `LoadOptions.base_dir`
+  — relative to the running file for files, to the cwd in the REPL.
 - `src/compiler/core/` — `token.hpp`, `lexer.{hpp,cpp}` (pitch-class-reserving
   lexer), `ast.{hpp,cpp}` (index-pooled tree + S-expr printer),
   `parser.{hpp,cpp}` (recursive descent + precedence climbing).
@@ -86,8 +94,12 @@ top-level generalizes).
 
 **Standard library (bootstrap step 3, in progress).** The thin C++ core exposes
 only *axioms*; `standard_library/prelude.cal` builds the rest in Calliope. The
-driver and tests prepend the prelude (path injected by CMake as
-`CALLIOPE_PRELUDE_PATH`).
+prelude is **not auto-loaded** — a program must `#load "prelude"` to use it
+(`#load` resolves `"prelude"` to the CMake-injected `CALLIOPE_PRELUDE_PATH`, any
+other name to a file path). The `calliopei` REPL preloads it for convenience.
+`driver::compile` parses each unit (program + each `#load`ed file) **separately and
+merges the ASTs**, so error line/col numbers stay relative to the file they occur
+in (loaded units never shift the program's lines).
 - **Core axioms (builtins):** list — `null` / `head` / `tail` / `cons`; pitch
   projections — `semitones` / `diatonicStep` / `chromaticOf` / `makePitch`; Music IR
   — constructors `note` / `noteWith` / `sequence` / `parallel`, predicates `isNote` /
@@ -114,9 +126,14 @@ desugars into it — a single pitch is a `Pitch`, but a run (`c d e`), a chord
 honored (`c'8` = 1/8, default quarter). The builtin `Transposable Music` instance
 maps `^+`/`^-` over every note, preserving spelling + durations, so `c d e ^+ P5`
 transposes the phrase. `Modify` (tempo/key/dynamics controls) isn't built — those
-combinators don't exist yet. Typecheck of `:+:`/`:=:` is strict `Music -> Music ->
-Music`, so `c' :+: d'` (bare `Pitch` operands) type-errors even though eval would
-lift them; the canonical form is adjacency (`c d e`, a `Seq`).
+combinators don't exist yet. `:+:`/`:=:` compose via a builtin single-parameter
+class **`Phrase`** (instances `Pitch` and `Music`): `(:+:) :: Phrase t => Phrase u
+=> t -> u -> Music`. A bare `Pitch` operand lifts to a one-note phrase, so `c' :+:
+d'` is `Music`, and a function over `:+:` stays polymorphic (`fn x = x :+: x` has
+type `Phrase t => t -> Music`); `1 :+: 2` is rejected (`no instance for Phrase
+Int`). Adjacency (`c d e`, a `Seq`) is still the idiomatic spelling. `:*:`
+repeats a phrase: `phrase :*: n :: Phrase t => t -> Int -> Music` (n copies in a
+row, `n >= 1`; binds tighter than `:+:`).
 
 Not yet built: octave-resolution pass (absolute works inline; `#relative` needs
 it), the score IR + backends, more prelude (intervals as a monoid, scales/keys,
@@ -216,16 +233,27 @@ third_party/libs/
   hoxml/              MusicXML *parser* (note: we need a writer for output)
   miniz               zip (de)compression (e.g. .mxl, compressed SF2)
 third_party/fonts/        UI font (Zed Mono Nerd Font)
-third_party/soundfonts/   instrument samples for playback
+third_party/soundfonts/   instrument samples for playback (sso/ auto-fetched, gitignored)
+cmake/
+  FetchSoundfonts.cmake   shallow-clones the SSO sample library on demand
 ```
+
+**Soundfonts are fetched, not committed.** `cmake/FetchSoundfonts.cmake` (run at
+configure time) shallow-clones the ~2.6 GB Sonatina Symphonic Orchestra (SFZ) from
+`github.com/peastman/sso` into `third_party/soundfonts/sso` only if it is missing;
+that directory is gitignored. Skip the download with
+`-DCALLIOPE_FETCH_SOUNDFONTS=OFF`. The path is exposed to C++ as
+`CALLIOPE_SOUNDFONT_DIR` for the (not-yet-built) synth backend.
 
 ## Building
 
 ```sh
-cmake -S . -B build
+cmake -S . -B build              # also fetches SSO soundfonts (~2.6 GB) if missing;
+                                 #   add -DCALLIOPE_FETCH_SOUNDFONTS=OFF to skip
 cmake --build build
 ./build/calliope file.cal        # emit Music IR of `main` (see docs/README.md)
-./build/calliope-repl            # interactive REPL
+./build/calliopei file.cal       # interpret a file (prints main's IR)
+./build/calliopei                # no args: interactive REPL
 ctest --test-dir build           # or run ./build/calliope_tests directly
 ```
 

@@ -9,6 +9,9 @@ if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Debug)
 endif()
 
+# Fetch the SSO soundfont library on demand (sets CALLIOPE_SOUNDFONT_DIR).
+include(${CMAKE_SOURCE_DIR}/cmake/FetchSoundfonts.cmake)
+
 # Core sources shared by the driver and the test binary.
 set(CALLIOPE_CORE
     src/compiler/core/rational.cpp
@@ -32,7 +35,8 @@ target_include_directories(calliope PRIVATE src/compiler)
 # Path to the Calliope standard library (loaded as a prelude before user code).
 set(CALLIOPE_STDLIB_DIR "${CMAKE_SOURCE_DIR}/standard_library")
 target_compile_definitions(calliope PRIVATE
-    CALLIOPE_PRELUDE_PATH="${CALLIOPE_STDLIB_DIR}/prelude.cal")
+    CALLIOPE_PRELUDE_PATH="${CALLIOPE_STDLIB_DIR}/prelude.cal"
+    CALLIOPE_SOUNDFONT_DIR="${CALLIOPE_SOUNDFONT_DIR}")
 
 if(MSVC)
     target_compile_options(calliope PRIVATE /W4)
@@ -40,18 +44,18 @@ else()
     target_compile_options(calliope PRIVATE -Wall -Wextra)
 endif()
 
-# --- interactive interpreter / REPL ---------------------------------------
-add_executable(calliope-repl
-    src/compiler/interactive.cpp
+# --- interpreter: runs a file or starts a REPL ----------------------------
+add_executable(calliopei
+    src/compiler/calliopei.cpp
     ${CALLIOPE_CORE}
 )
-target_include_directories(calliope-repl PRIVATE src/compiler)
-target_compile_definitions(calliope-repl PRIVATE
+target_include_directories(calliopei PRIVATE src/compiler)
+target_compile_definitions(calliopei PRIVATE
     CALLIOPE_PRELUDE_PATH="${CALLIOPE_STDLIB_DIR}/prelude.cal")
 if(MSVC)
-    target_compile_options(calliope-repl PRIVATE /W4)
+    target_compile_options(calliopei PRIVATE /W4)
 else()
-    target_compile_options(calliope-repl PRIVATE -Wall -Wextra)
+    target_compile_options(calliopei PRIVATE -Wall -Wextra)
 endif()
 
 # --- tests (separate binary; does not link the main driver) ---------------

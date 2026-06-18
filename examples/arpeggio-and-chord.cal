@@ -3,6 +3,8 @@
 -- `notes` lifts pitches to notes; `line` plays them in sequence (an arpeggio),
 -- `chord` sounds them together (a block chord).
 
+#load "prelude"
+
 triad = [c', e', g']
 
 arpeggio = line  (notes triad)   -- C, then E, then G

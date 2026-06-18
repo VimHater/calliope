@@ -4,6 +4,8 @@
 -- the nested form `times 2 (transpose P5 (invert subject))` — the pipeline reads
 -- in the order the transforms actually happen.
 
+#load "prelude"
+
 subject = c' d' e' g'
 
 main = subject

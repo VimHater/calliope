@@ -1,0 +1,5 @@
+mod x y = x - x / y * y
+
+gcd x y = if y == 0 then x else gcd y (mod x y)
+
+main = gcd 48 36        -- 12

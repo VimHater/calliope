@@ -29,11 +29,11 @@ std::string read_file(const char* path) {
     return ss.str();
 }
 
-std::string prelude_source() {
+const char* prelude_path() {
 #ifdef CALLIOPE_PRELUDE_PATH
-    return read_file(CALLIOPE_PRELUDE_PATH);
+    return CALLIOPE_PRELUDE_PATH;
 #else
-    return std::string();
+    return "";
 #endif
 }
 
@@ -131,8 +131,12 @@ int main(int argc, char** argv) {
     if (want_tokens) dump_tokens(src);
     if (want_ast)    dump_ast(src);
 
+    // Files do not get the prelude automatically — they must `#load "prelude"`.
+    // Relative `#load` paths resolve against the file's own directory.
+    std::string base = calliope::driver::directory_of(input);
+    calliope::driver::LoadOptions opts{prelude_path(), base, false};
     calliope::driver::Compilation c;
-    calliope::driver::compile(prelude_source(), src, c);
+    calliope::driver::compile(src, opts, c);
 
     if (want_types) {
         std::printf("== types ==\n");

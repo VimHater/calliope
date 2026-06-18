@@ -130,6 +130,9 @@ void run_eval_tests() {
                  "((G3:1/4 :+: A3:1/4) :+: B3:1/4)");
     // explicit :+: / :=: combinators build the same IR (Pitch operands lift to Notes)
     CHECK_EQ_STR(eval::show_value(run_main("c' :+: d'")), "(C4:1/4 :+: D4:1/4)");
+    // `:*:` repeats a phrase n times in a row (right-leaning, like `times`)
+    CHECK_EQ_STR(eval::show_value(run_main("c' :*: 3")),
+                 "(C4:1/4 :+: (C4:1/4 :+: C4:1/4))");
 
     // ---- pipe, cons, case ------------------------------------------------
     // pipe: x |> f = f x (left-associative, so it chains)

@@ -224,15 +224,17 @@ total = 1 +
 Lines beginning with `#` are preprocessor directives:
 
 ```
+#load "prelude"        -- bring the standard library into scope
+#load "scales.cal"     -- load another file (its bindings join the program)
 #relative c'
 #absolute
-#load "scales.cal"
 ```
 
-They are parsed today, but **octave resolution and file loading are not yet
-implemented** — octaves are always absolute (`#relative` has no effect yet), and
-`#load` does nothing. The standard library is loaded automatically by the driver,
-not via `#load`.
+**`#load` works**: `#load "prelude"` loads the bundled standard library; any other
+name is read as a file path. Loaded files are parsed as their own units and merged
+in, so they do not shift the program's error line numbers. A program must `#load
+"prelude"` to use the stdlib (the REPL preloads it). `#relative` / `#absolute`
+are parsed but **not yet implemented** — octaves are always absolute.
 
 ## Comments
 

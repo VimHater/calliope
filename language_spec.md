@@ -374,11 +374,20 @@ par     :: Music -> Music -> Music     -- = (:=:), reads as "against"
 chord   :: [Music] -> Music            -- fold (:=:)
 
 -- Repetition
-times   :: Int -> Music -> Music       -- repeat n times sequentially
+(:*:)   :: Phrase t => t -> Int -> Music  -- phrase :*: n — n copies in a row
+times   :: Int -> Music -> Music          -- = flip (:*:), repeat n times sequentially
 ```
 
 So `motif1 :+: motif2` and ``motif1 `andThen` motif2`` are the same;
 `upper :=: lower` and ``upper `par` lower`` are the same.
+
+> **As implemented**, `:+:`/`:=:` admit a bare `Pitch` on either side: they are
+> methods of a builtin single-parameter class `Phrase` (instances `Pitch` and
+> `Music`), so the real signature is `(:+:) :: Phrase t => Phrase u => t -> u ->
+> Music`. A `Pitch` operand lifts to a one-note phrase (`c' :+: d'` = `Music`), a
+> function over `:+:` stays polymorphic (`fn x = x :+: x :: Phrase t => t ->
+> Music`), and a non-phrase operand (`1 :+: 2`) is rejected. Adjacency (`c d e`,
+> a `Seq`) remains the idiomatic spelling.
 
 Example — a I–IV–V–I progression as block chords over a melody:
 

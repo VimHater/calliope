@@ -23,6 +23,8 @@ is in [`../CLAUDE.md`](../CLAUDE.md).
   functional suits music, and the Calliope/Haskell syntax you need to read the code.
 - **[syntax.md](./syntax.md)** — lexical rules, pitch/notation literals, bindings,
   expressions, types, type classes, multi-line layout, directives.
+- **[types.md](./types.md)** — the type system: inference, the base types, type
+  variables and polymorphism, type classes, signatures, and type errors.
 - **[builtins.md](./builtins.md)** — the thin C++ core: operators and primitive
   functions (arithmetic, comparison, list axioms, pitch projections, Music tree
   axioms, transposition).
@@ -49,26 +51,45 @@ usage: calliope [options] <file.cal>
   --dump <what>   tokens | ast | types   (repeatable)
 ```
 
-The compiler prepends the standard-library prelude, so every stdlib function is in
-scope. A program is a set of bindings; `main` is the entry point and is expected to
-have type `Music` (any value type works while experimenting). Today only `--emit
-ir` is wired up — it prints the evaluated Music tree; the audio / MIDI / MusicXML
-backends are stubs that report "not implemented".
+A program is a set of bindings; `main` is the entry point and is expected to have
+type `Music` (any value type works while experimenting). To use the standard
+library, a file must load it explicitly with a directive:
 
-### REPL — `calliope-repl`
+```
+#load "prelude"
+```
+
+(`#load "prelude"` resolves to the bundled standard library; other names are read
+as file paths. Each loaded file is parsed as its own unit, so error line numbers
+stay relative to the file they occur in.) Today only `--emit ir` is wired up — it
+prints the evaluated Music tree; the audio / MIDI / MusicXML backends are stubs
+that report "not implemented".
+
+### Interpreter — `calliopei`
+
+Runs a file, or starts a REPL when given no arguments. Both print the evaluated
+Music tree. A file must `#load "prelude"` to use the stdlib; **the REPL preloads
+the prelude**, so it is always in scope there.
 
 ```sh
-./build/calliope-repl
+./build/calliopei file.cal       # run a file: print the Music tree of `main`
+
+./build/calliopei                # no args: start the REPL (prelude preloaded)
+λ> double x = x * 2              # a definition is remembered for the session
+λ> double 5
+  10 :: Int
 λ> transpose P5 (c' e' g')
-  ((G4:1/4 :+: B4:1/4) :+: D5:1/4)  :: Music
-λ> :type invert
-  :: Music -> Music
+  ((G4:1/4 :+: B4:1/4) :+: D5:1/4) :: Music
 λ> :quit
 ```
 
-Each line is evaluated as an expression with the prelude in scope. `:type <expr>`
-shows a type without evaluating; `:quit` (or `:q`) exits. (Persistent session
-bindings and multi-line input are not implemented yet.)
+A line that parses as a **definition** (`x = …`, `foo x = …`, a signature, a
+`class`/`instance`) — or a `#load "file"` directive — is added to the session,
+silently, like ghci, and stays in scope; if it fails to compile it is reported and
+not kept. Any other line is **evaluated** as an expression: its value and its
+inferred type are printed on one line. `:type <expr>` shows a type without
+evaluating; `:quit` (or `:q`) exits. (No line editing/history yet, and multi-line
+input is not implemented, so each definition must fit on one line.)
 
 ### Examples
 
