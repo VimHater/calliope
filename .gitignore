@@ -1,0 +1,17 @@
+compile_commands.json
+
+calliope
+calliope_tests
+*.o
+*.obj
+*.a
+*.lib
+*.so
+*.dylib
+*.dll
+*.exe
+
+*.swp
+*~
+.DS_Store
+Thumbs.db

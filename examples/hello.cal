@@ -1,0 +1,6 @@
+-- hello.cal — smallest Calliope piece: a C major scale, one note after another.
+-- Bare lowercase notes are pitches; adjacency means "play in sequence".
+-- 'main' is a normal identifier (not pitch-shaped), so no sigil is needed.
+
+main :: Music
+main = c'4 d' e' f' g' a' b' c''
