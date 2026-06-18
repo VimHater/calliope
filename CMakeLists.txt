@@ -16,6 +16,8 @@ set(CALLIOPE_CORE
     src/compiler/core/lexer.cpp
     src/compiler/core/ast.cpp
     src/compiler/core/parser.cpp
+    src/compiler/core/eval.cpp
+    src/compiler/core/typecheck.cpp
 )
 
 add_executable(calliope
@@ -40,6 +42,8 @@ add_executable(calliope_tests
     tests/test_parser.cpp
     tests/test_rational.cpp
     tests/test_pitch.cpp
+    tests/test_eval.cpp
+    tests/test_typecheck.cpp
     tests/test_main.cpp
     ${CALLIOPE_CORE}
 )

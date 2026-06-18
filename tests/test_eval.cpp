@@ -1,0 +1,91 @@
+#include "test.hpp"
+
+#include "eval.hpp"
+#include "lexer.hpp"
+#include "parser.hpp"
+
+#include <utility>
+
+using namespace calliope;
+
+namespace {
+
+// Run a program, return the value bound to `name` (Unit if missing/error).
+eval::Value run(std::string_view src, std::string_view name) {
+    std::vector<Token> toks = lex::tokenize(src);
+    ast::Ast a = parse::parse_program(std::move(toks), nullptr);
+    eval::Interp I;
+    auto env = eval::eval_program(a, I);
+    eval::Value v;
+    eval::env_lookup(env, name, v);
+    return v;
+}
+
+// Convenience: evaluate `main = <expr>` and fetch main.
+eval::Value run_main(std::string_view expr) {
+    std::string src = "main = ";
+    src += expr;
+    return run(src, "main");
+}
+
+} // namespace
+
+void run_eval_tests() {
+    // arithmetic + precedence
+    CHECK(run_main("1 + 2 * 3").i == 7);
+    CHECK(run_main("(1 + 2) * 3").i == 9);
+    CHECK(run_main("10 - 4 - 3").i == 3);   // left assoc would be 3; check value
+    CHECK(run_main("8 / 2").i == 4);
+
+    // comparison + if
+    CHECK(run_main("if 1 < 2 then 10 else 20").i == 10);
+    CHECK(run_main("if 2 < 1 then 10 else 20").i == 20);
+
+    // application, currying, lambda
+    CHECK(run("id x = x\nmain = id 42", "main").i == 42);
+    CHECK(run("k x y = x\nmain = k 7 9", "main").i == 7);
+    CHECK(run("main = (\\x -> x + 1) 41", "main").i == 42);
+
+    // booleans: literals, and/or/not, short-circuit
+    CHECK(run_main("True").i == 1);
+    CHECK(run_main("False").i == 0);
+    CHECK(run_main("True and False").i == 0);
+    CHECK(run_main("True or False").i == 1);
+    CHECK(run_main("not True").i == 0);
+    CHECK(run_main("1 < 2 and 2 < 3").i == 1);
+    CHECK(run_main("not (1 < 2) or 3 < 4").i == 1);
+    // short-circuit: right side (division by zero) must not be evaluated
+    CHECK(run_main("True or 1 / 0 == 0").i == 1);
+    CHECK(run_main("False and 1 / 0 == 0").i == 0);
+
+    // recursion: factorial
+    CHECK(run("fac n = if n == 0 then 1 else n * fac (n - 1)\nmain = fac 5",
+              "main").i == 120);
+
+    // mutual recursion (+ booleans returned through it)
+    CHECK(run("isEven n = if n == 0 then True else isOdd (n - 1)\n"
+              "isOdd n = if n == 0 then False else isEven (n - 1)\n"
+              "main = isEven 10",
+              "main").i == 1);
+    CHECK(run("isEven n = if n == 0 then True else isOdd (n - 1)\n"
+              "isOdd n = if n == 0 then False else isEven (n - 1)\n"
+              "main = isEven 7",
+              "main").i == 0);
+
+    // let / where
+    CHECK(run("main = let y = 5 in y * y", "main").i == 25);
+    // (p/q, not a/b: a and b are the pitches A and B)
+    CHECK(run("main = p * q\n  where\n    p = 6\n    q = 7", "main").i == 42);
+
+    // music: transpose a pitch up a fifth, check via semitones builtin
+    // c' = C4 = 48 ; up P5 -> G4 = 55
+    CHECK(run_main("semitones (c' ^+ P5)").i == 55);
+    CHECK(run_main("semitones (c' ^- P8)").i == 36);  // down an octave -> C3
+
+    // a transposed pitch is itself a Pitch value, spelled
+    eval::Value g = run_main("c' ^+ P5");
+    CHECK(g.kind == eval::ValueKind::Pitch);
+    CHECK(g.pitch.letter == 4);   // G
+    CHECK(g.pitch.accidental == 0);
+    CHECK(g.pitch.octave == 4);
+}

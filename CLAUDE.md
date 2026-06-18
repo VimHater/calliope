@@ -41,13 +41,22 @@ Frontend first cut exists; nothing executes music yet.
   clean).
 - `third_party/` — vendored dependencies already in place (see below).
 
-Done: arithmetic core (`Rational`, `Pitch` projections — bootstrap step 1,
-spec §14.4); lex → parse → AST for bindings, type sigs, `#` directives, pitch-run
-sequencing, application, infix/backtick operators, lists, chords, lambda,
-`let`/`if`, `where` (column-aligned, desugars to `let`). 73 tests green.
-Not yet built: evaluator + typechecker (plain single-param classes), octave-resolution
-pass, desugar to Music IR, score IR, backends, `.cal` prelude. Bootstrap
-order is step 1 (done) → step 2 (eval+types) → step 3 (load prelude).
+Done: arithmetic core (`Rational`, `Pitch` projections — step 1); lex → parse →
+AST; **tree-walking evaluator** (currying, recursion + mutual recursion,
+let/where, booleans `True`/`False` + `and`/`or`/`not` with short-circuit, builtins
+wired to the pitch core — `c' ^+ P5` really transposes) and **HM typechecker** (unify +
+Algorithm W, let-generalization) over the pure subset — **step 2**. The driver
+prints tokens, AST, the inferred type of `main`, and its evaluated value.
+106 tests green. End-to-end works: `main = semitones (c' ^+ P5)` → `Int` / `55`.
+
+Typechecker is WIP: no user type classes/instances yet (so `^+` is monomorphic
+`Pitch`, not the `Transposable` class), `let` is monomorphic (top-level
+generalizes), no pattern matching / `data` decls. Evaluator: durations on pitch
+literals are parsed but ignored; Music is a placeholder `Con` tree, not the real
+IR yet.
+
+Not yet built: octave-resolution pass, desugar to the real Music IR, score IR,
+backends, the `.cal` prelude (step 3). Bootstrap: step 1 ✓ → step 2 ✓ → step 3.
 
 ## Architecture (intended)
 
@@ -108,6 +117,9 @@ Two IRs, designed independently (spec §13):
 - **Bootstrap order:** (1) number+pitch primitives [arithmetic first] →
   (2) evaluator + typechecker → (3) load `.cal` prelude. Step (1) is standalone
   C++ with its own tests.
+- **IO model (O14):** `main :: Music` — pure program, runtime renders the value
+  (spec §15). No language-level IO. Grow to an effects list (`main :: [Output]`)
+  if multiple outputs are ever needed; IO monad out of scope.
 - Still open: O9 backend priority · O11 time model (leaning exact rationals →
   ticks at the score-IR boundary) · O12 preprocessor system design.
 
@@ -117,12 +129,14 @@ Two IRs, designed independently (spec §13):
 src/compiler/
   compiler.cpp        driver: tokenize + parse a .cal file, dump tokens & AST
   core/
-    rational.{hpp,cpp} exact Rational arithmetic (Duration/tuplet/tempo)
-    pitch.{hpp,cpp}    spelled Pitch projections (semitones, diatonic_step, mk_pitch)
-    token.hpp          TokenKind + Token
-    lexer.{hpp,cpp}    tokenize() — reserves the pitch lexical class
-    ast.{hpp,cpp}      index-pooled AST (NodeKind/Node/NodeId) + printer
-    parser.{hpp,cpp}   parse_program() — recursive descent + precedence climbing
+    rational.{hpp,cpp}  exact Rational arithmetic (Duration/tuplet/tempo)
+    pitch.{hpp,cpp}     spelled Pitch projections (semitones, diatonic_step, mk_pitch)
+    token.hpp           TokenKind + Token
+    lexer.{hpp,cpp}     tokenize() — reserves the pitch lexical class
+    ast.{hpp,cpp}       index-pooled AST (NodeKind/Node/NodeId) + printer
+    parser.{hpp,cpp}    parse_program() — recursive descent + precedence climbing
+    eval.{hpp,cpp}      tree-walking evaluator (Value/Env/Closure, builtins)
+    typecheck.{hpp,cpp} Hindley–Milner inference (unify + Algorithm W)
 third_party/libs/
   fluidsynth/         SoundFont synth (playback)
   sfizz/              SFZ sampler (playback)

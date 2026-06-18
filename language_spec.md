@@ -553,6 +553,9 @@ Decisions we should make explicitly:
   *read or assembled*, never what the music *is*.
 - **O11 — Time model.** Durations as exact rationals (recommended — avoids
   floating-point drift in tuplets/ties) vs. ticks-per-quarter integer grid.
+- **O14 — IO / output model. _Decided:_** `main :: Music` — pure program, runtime
+  renders the value (§15). No language-level IO; grow to an effects list
+  (`main :: [Output]`) if needed; IO monad out of scope.
 - **O13 — Transposition operator. _Decided:_** a dedicated operator `^+` (up) /
   `^-` (down) via a plain **single-parameter** class `Transposable a` (§14.3), not
   an overload of `+`. `+` stays purely numeric. This keeps the type checker on
@@ -735,3 +738,29 @@ The stdlib can't run until the core does. Implementation order:
 **(2)** evaluator + typechecker (plain single-parameter type classes) →
 **(3)** load the `.cal` prelude. Step (1) is self-contained C++ with its own
 tests, independent of (2).
+
+---
+
+## 15. Program output (IO) — O14
+
+**Decided: `main :: Music`.** A Calliope program is a pure value; the runtime
+renders/plays whatever `main` evaluates to, fanning it through the §13.2 score IR
+to audio / MIDI / MusicXML. There is **no IO in the language** — purity holds end
+to end, and effects exist only at the runtime boundary, applied to the final
+value (never callable mid-computation).
+
+```haskell
+main :: Music
+main = tempo allegro (instrument piano theme)   -- the runtime plays this
+```
+
+**Growth path.** If one run ever needs several outputs at once (play *and* write a
+file *and* log), introduce an **effects list** — `main :: [Output]` with
+`Play`/`WriteMidi`/`Print` constructors that the runtime interprets in order.
+That is plain data, still **no monad**. A full Haskell-style **IO monad**
+(`main :: IO ()`, do-notation) is explicitly **out of scope** unless interactive
+or live performance becomes a goal — it is a large type-system + runtime cost for
+a batch composition tool.
+
+**Debugging** is covered by the driver printing `main`'s value; a pure
+`trace`-style helper can be added later. No impure `print`.

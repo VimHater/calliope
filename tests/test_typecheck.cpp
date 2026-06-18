@@ -1,0 +1,67 @@
+#include "test.hpp"
+
+#include "lexer.hpp"
+#include "parser.hpp"
+#include "typecheck.hpp"
+
+#include <utility>
+
+using namespace calliope;
+
+namespace {
+
+std::string type_of(std::string_view src, std::string_view name) {
+    std::vector<Token> toks = lex::tokenize(src);
+    ast::Ast a = parse::parse_program(std::move(toks), nullptr);
+    std::vector<std::string> errs;
+    return types::infer_named_type(a, name, errs);
+}
+
+bool has_type_error(std::string_view src) {
+    std::vector<Token> toks = lex::tokenize(src);
+    ast::Ast a = parse::parse_program(std::move(toks), nullptr);
+    std::vector<std::string> errs;
+    types::typecheck_program(a, errs);
+    return !errs.empty();
+}
+
+} // namespace
+
+void run_typecheck_tests() {
+    // literals and arithmetic
+    CHECK_EQ_STR(type_of("main = 1 + 2 * 3", "main"), "Int");
+    CHECK_EQ_STR(type_of("main = 1 < 2", "main"), "Bool");
+
+    // function types
+    CHECK_EQ_STR(type_of("inc x = x + 1", "inc"), "Int -> Int");
+    CHECK_EQ_STR(type_of("k x y = x + y", "k"), "Int -> Int -> Int");
+
+    // polymorphic identity (let-generalized at top level)
+    CHECK_EQ_STR(type_of("id x = x", "id"), "t0 -> t0");
+
+    // if and recursion
+    CHECK_EQ_STR(type_of("fac n = if n == 0 then 1 else n * fac (n - 1)", "fac"),
+                 "Int -> Int");
+
+    // music: transpose
+    CHECK_EQ_STR(type_of("main = c' ^+ P5", "main"), "Pitch");
+    CHECK_EQ_STR(type_of("main = semitones (c' ^+ P5)", "main"), "Int");
+    CHECK_EQ_STR(type_of("main = c d e", "main"), "Music");
+
+    // lists
+    CHECK_EQ_STR(type_of("main = [1, 2, 3]", "main"), "[Int]");
+
+    // booleans
+    CHECK_EQ_STR(type_of("main = True and False", "main"), "Bool");
+    CHECK_EQ_STR(type_of("main = not (1 < 2)", "main"), "Bool");
+    CHECK_EQ_STR(type_of("isPos n = n < 0 or n == 0", "isPos"), "Int -> Bool");
+
+    // type errors are detected
+    CHECK(has_type_error("main = 1 + c'"));        // Int + Pitch
+    CHECK(has_type_error("main = if 1 then 2 else 3")); // non-Bool condition
+    CHECK(has_type_error("main = semitones 5"));   // semitones wants a Pitch
+    CHECK(has_type_error("main = 1 and True"));    // Int where Bool expected
+
+    // well-typed programs report no error
+    CHECK(!has_type_error("inc x = x + 1\nmain = inc 41"));
+}

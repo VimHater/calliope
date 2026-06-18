@@ -38,7 +38,8 @@ void error(Parser& p, const char* msg) {
 
 bool is_keyword(std::string_view s) {
     return s == "let" || s == "in" || s == "where" || s == "if" ||
-           s == "then" || s == "else" || s == "data" || s == "type" || s == "of";
+           s == "then" || s == "else" || s == "data" || s == "type" || s == "of" ||
+           s == "and" || s == "or";  // 'and'/'or' are infix boolean operators
 }
 
 NodeId mk(Parser& p, NodeKind k, const Token& t) {
@@ -53,10 +54,12 @@ NodeId mk(Parser& p, NodeKind k, const Token& t) {
 // declarations come later; see language_spec.md §9.
 bool op_fixity(std::string_view op, int& prec, bool& right) {
     if (op == "$")   { prec = 0; right = true;  return true; }
-    if (op == ":=:") { prec = 4; right = true;  return true; }
+    if (op == "==" || op == "<" || op == ">" || op == "/=" ||
+        op == "<=" || op == ">=") { prec = 4; right = false; return true; } // compare
+    if (op == ":=:") { prec = 3; right = true;  return true; }
     if (op == ":+:") { prec = 5; right = true;  return true; }
     if (op == "^+" || op == "^-") { prec = 6; right = false; return true; } // transpose
-    if (op == "+" || op == "-") { prec = 6; right = true;  return true; }
+    if (op == "+" || op == "-") { prec = 6; right = false; return true; } // left-assoc
     if (op == "*" || op == "/") { prec = 7; right = false; return true; }
     if (op == ".")   { prec = 9; right = true;  return true; }
     prec = 9; right = false; return true; // default for other symbolic ops
@@ -90,6 +93,9 @@ bool can_start_arg(Parser& p) {
     const Token& t = cur(p);
     if (!starts_primary(t.kind)) return false;
     if (t.kind == TokenKind::Ident && is_keyword(t.text)) return false;
+    // '<' after an operand is comparison, not a chord argument; a chord used as
+    // an argument must be parenthesized: f (<c e g>).
+    if (t.kind == TokenKind::Less) return false;
     return true;
 }
 
@@ -259,6 +265,20 @@ NodeId parse_expr(Parser& p, int min_prec) {
 
         if (t.kind == TokenKind::Operator) {
             op_fixity(t.text, prec, right);
+            if (prec < min_prec) break;
+            op_tok = t;
+            advance(p);
+        } else if (t.kind == TokenKind::Less || t.kind == TokenKind::Greater) {
+            // '<'/'>' in infix position are comparisons ('<' in primary position
+            // opens a chord, handled by parse_primary).
+            prec = 4; right = false;
+            if (prec < min_prec) break;
+            op_tok = t;
+            advance(p);
+        } else if (t.kind == TokenKind::Ident && (t.text == "and" || t.text == "or")) {
+            // boolean keyword operators (short-circuit handled in the evaluator)
+            prec = (t.text == "or") ? 2 : 3;
+            right = true;
             if (prec < min_prec) break;
             op_tok = t;
             advance(p);

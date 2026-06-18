@@ -1,6 +1,8 @@
 #include "core/ast.hpp"
+#include "core/eval.hpp"
 #include "core/lexer.hpp"
 #include "core/parser.hpp"
+#include "core/typecheck.hpp"
 
 #include <cstdio>
 #include <fstream>
@@ -55,9 +57,23 @@ int main(int argc, char** argv) {
     calliope::ast::ast_print(ast, ast.root, 0);
 
     if (!errors.empty()) {
-        std::printf("\n== errors ==\n");
+        std::printf("\n== parse errors ==\n");
         for (const std::string& e : errors) std::printf("%s\n", e.c_str());
     }
+
+    std::vector<std::string> type_errors;
+    std::string main_type = calliope::types::infer_named_type(ast, "main", type_errors);
+    std::printf("\n== types ==\n");
+    if (!main_type.empty()) std::printf("main :: %s\n", main_type.c_str());
+    for (const std::string& e : type_errors) std::printf("%s\n", e.c_str());
+
+    calliope::eval::Interp interp;
+    auto env = calliope::eval::eval_program(ast, interp);
+    calliope::eval::Value main_val;
+    std::printf("\n== eval ==\n");
+    if (calliope::eval::env_lookup(env, "main", main_val))
+        std::printf("main = %s\n", calliope::eval::show_value(main_val).c_str());
+    for (const std::string& e : interp.errors) std::printf("%s\n", e.c_str());
 
     return 0;
 }
