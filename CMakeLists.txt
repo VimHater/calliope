@@ -13,6 +13,7 @@ endif()
 set(CALLIOPE_CORE
     src/compiler/core/rational.cpp
     src/compiler/core/pitch.cpp
+    src/compiler/core/music.cpp
     src/compiler/core/lexer.cpp
     src/compiler/core/ast.cpp
     src/compiler/core/parser.cpp
@@ -26,6 +27,11 @@ add_executable(calliope
 )
 
 target_include_directories(calliope PRIVATE src/compiler)
+
+# Path to the Calliope standard library (loaded as a prelude before user code).
+set(CALLIOPE_STDLIB_DIR "${CMAKE_SOURCE_DIR}/standard_library")
+target_compile_definitions(calliope PRIVATE
+    CALLIOPE_PRELUDE_PATH="${CALLIOPE_STDLIB_DIR}/prelude.cal")
 
 if(MSVC)
     target_compile_options(calliope PRIVATE /W4)
@@ -42,13 +48,17 @@ add_executable(calliope_tests
     tests/test_parser.cpp
     tests/test_rational.cpp
     tests/test_pitch.cpp
+    tests/test_music.cpp
     tests/test_eval.cpp
     tests/test_typecheck.cpp
+    tests/test_stdlib.cpp
     tests/test_main.cpp
     ${CALLIOPE_CORE}
 )
 
 target_include_directories(calliope_tests PRIVATE src/compiler/core tests)
+target_compile_definitions(calliope_tests PRIVATE
+    CALLIOPE_PRELUDE_PATH="${CALLIOPE_STDLIB_DIR}/prelude.cal")
 
 if(MSVC)
     target_compile_options(calliope_tests PRIVATE /W4)

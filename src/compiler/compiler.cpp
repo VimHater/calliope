@@ -61,14 +61,25 @@ int main(int argc, char** argv) {
         for (const std::string& e : errors) std::printf("%s\n", e.c_str());
     }
 
+    // Typecheck and evaluate against the standard-library prelude prepended to
+    // the user program (the AST dumped above is the user program alone).
+    std::string combined;
+#ifdef CALLIOPE_PRELUDE_PATH
+    combined += read_file(CALLIOPE_PRELUDE_PATH);
+    combined += "\n";
+#endif
+    combined += src;
+    calliope::ast::Ast prog =
+        calliope::parse::parse_program(calliope::lex::tokenize(combined), nullptr);
+
     std::vector<std::string> type_errors;
-    std::string main_type = calliope::types::infer_named_type(ast, "main", type_errors);
+    std::string main_type = calliope::types::infer_named_type(prog, "main", type_errors);
     std::printf("\n== types ==\n");
     if (!main_type.empty()) std::printf("main :: %s\n", main_type.c_str());
     for (const std::string& e : type_errors) std::printf("%s\n", e.c_str());
 
     calliope::eval::Interp interp;
-    auto env = calliope::eval::eval_program(ast, interp);
+    auto env = calliope::eval::eval_program(prog, interp);
     calliope::eval::Value main_val;
     std::printf("\n== eval ==\n");
     if (calliope::eval::env_lookup(env, "main", main_val))

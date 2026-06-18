@@ -19,6 +19,9 @@ enum class NodeKind : std::uint8_t {
     Directive,  // tok: name (relative/absolute/load); kids: argument exprs
     TypeSig,    // tok: name; kids: TypeAtom tokens of the signature
     Binding,    // tok: name; kids: Param* then body expr; extra: param count
+    ClassDecl,  // tok: class name; kids[0]: Param (type var), kids[1..]: MethodSig
+    InstanceDecl, // tok: class name; kids[0]: Con (instance type), kids[1..]: Binding
+    MethodSig,  // tok: method name; kids: TypeAtom tokens of the method signature
 
     PitchLit,   // tok: pitch literal
     RestLit,    // tok: r/R/s

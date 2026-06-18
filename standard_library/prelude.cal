@@ -1,0 +1,44 @@
+-- Calliope standard library — list commons.
+--
+-- Written in Calliope on top of the thin C++ core. The core provides only the
+-- list axioms; everything here is ordinary Calliope (recursion + if/else):
+--
+--   null :: [t] -> Bool        true on the empty list
+--   head :: [t] -> t           first element
+--   tail :: [t] -> [t]         everything after the first
+--   cons :: t -> [t] -> [t]    prepend one element
+--
+-- (Type variables can't be spelled like a pitch — a..g, r, s — so we use `t`.)
+
+-- length of a list
+length xs =
+  if null xs
+  then 0
+  else 1 + length (tail xs)
+
+-- apply a function to every element
+map fn xs =
+  if null xs
+  then []
+  else cons (fn (head xs)) (map fn (tail xs))
+
+-- keep the elements that satisfy a predicate
+filter pred xs =
+  if null xs then []
+  else if pred (head xs)
+       then cons (head xs) (filter pred (tail xs))
+       else filter pred (tail xs)
+
+-- reverse a list (a tail-recursive accumulator does the work)
+reverse xs = go xs []
+  where
+    go ys acc =
+      if null ys
+      then acc
+      else go (tail ys) (cons (head ys) acc)
+
+-- drop the first n elements (or all of them if the list is shorter)
+drop n xs =
+  if n == 0 then xs
+  else if null xs then xs
+  else drop (n - 1) (tail xs)

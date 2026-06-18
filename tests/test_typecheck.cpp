@@ -64,4 +64,43 @@ void run_typecheck_tests() {
 
     // well-typed programs report no error
     CHECK(!has_type_error("inc x = x + 1\nmain = inc 41"));
+
+    // ---- type classes ----------------------------------------------------
+    // (type variables can't be pitch letters a-g/r/s, so we use `t`.)
+    const char* desc =
+        "class Describable t where\n"
+        "  describe :: t -> Int\n"
+        "instance Describable Pitch where\n"
+        "  describe p = semitones p\n";
+
+    // a class method has a qualified (constrained) scheme
+    CHECK_EQ_STR(type_of(desc, "describe"), "Describable t0 => t0 -> Int");
+
+    // using a method at a type with an instance type-checks to that result
+    CHECK_EQ_STR(type_of(std::string(desc) + "main = describe c'", "main"), "Int");
+
+    // the constraint propagates into a function that uses the method
+    CHECK_EQ_STR(type_of(std::string(desc) + "twice x = describe x + describe x", "twice"),
+                 "Describable t0 => t0 -> Int");
+
+    // builtin Transposable: ^+ is a real class method with a Pitch instance
+    CHECK_EQ_STR(type_of("main = c' ^+ P5", "main"), "Pitch");
+
+    // using a method at a type with NO instance is an error
+    CHECK(has_type_error(std::string(desc) + "main = describe True"));
+    // ^+ on a type with no Transposable instance is an error
+    CHECK(has_type_error("main = 1 ^+ P5"));
+    // an instance whose impl has the wrong type is an error
+    CHECK(has_type_error(
+        "class Describable t where\n"
+        "  describe :: t -> Int\n"
+        "instance Describable Pitch where\n"
+        "  describe p = p\n"));   // returns Pitch, not Int
+
+    // a user class with two instances; both well typed
+    CHECK(!has_type_error(
+        std::string(desc) +
+        "instance Describable Bool where\n"
+        "  describe flag = if flag then 1 else 0\n"
+        "main = describe c' + describe False"));
 }

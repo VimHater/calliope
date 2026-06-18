@@ -45,18 +45,57 @@ Done: arithmetic core (`Rational`, `Pitch` projections — step 1); lex → pars
 AST; **tree-walking evaluator** (currying, recursion + mutual recursion,
 let/where, booleans `True`/`False` + `and`/`or`/`not` with short-circuit, builtins
 wired to the pitch core — `c' ^+ P5` really transposes) and **HM typechecker** (unify +
-Algorithm W, let-generalization) over the pure subset — **step 2**. The driver
-prints tokens, AST, the inferred type of `main`, and its evaluated value.
-106 tests green. End-to-end works: `main = semitones (c' ^+ P5)` → `Int` / `55`.
+Algorithm W, let-generalization) over the pure subset — **step 2**. Plus
+**single-parameter type classes**: `class`/`instance` declarations, qualified
+schemes (`Describable t => t -> Int`), constraint solving (grounded constraint ⇒
+must have an instance, else type error) and **runtime dispatch** on the method's
+first-argument type. `Transposable` is a real builtin class with a builtin `Pitch`
+instance; `^+`/`^-` are dispatched methods, so a user `instance Transposable Music`
+extends them. The driver prints tokens, AST, the inferred type of `main`, and its
+evaluated value. 136 tests green. End-to-end: `main = semitones (c' ^+ P5)` →
+`Int` / `55`; a user `class Describable` with `Pitch`/`Bool` instances dispatches.
 
-Typechecker is WIP: no user type classes/instances yet (so `^+` is monomorphic
-`Pitch`, not the `Transposable` class), `let` is monomorphic (top-level
-generalizes), no pattern matching / `data` decls. Evaluator: durations on pitch
-literals are parsed but ignored; Music is a placeholder `Con` tree, not the real
-IR yet.
+> **Lexical gotcha (locked):** type variables are identifiers, so they **cannot be
+> pitch-spelled** (`a`–`g`, `r`, `s`). Spec examples like `class Transposable a`
+> must be written with a non-pitch variable in real code — convention is `t`
+> (`class Transposable t where (^+) :: t -> Interval -> t`).
 
-Not yet built: octave-resolution pass, desugar to the real Music IR, score IR,
-backends, the `.cal` prelude (step 3). Bootstrap: step 1 ✓ → step 2 ✓ → step 3.
+Type classes are single-parameter only and dispatch on the **first** argument
+(the class type variable's position in every method we have). Top-level bindings
+are **dependency-sorted into SCCs and generalized in order** (Tarjan), so a
+polymorphic stdlib function (`map`, `length`) is generalized before later code
+uses it and can be used at several types in one program. Still WIP: no
+superclasses, no default-method bodies, no constraint on a method beyond its own
+class; `let` bindings are still monomorphic (only top-level generalizes); no
+pattern matching / `data` decls.
+
+**Standard library (bootstrap step 3 started).** Thin C++ core exposes list
+*axioms* only — `null` / `head` / `tail` / `cons` (polymorphic builtins) — and
+`standard_library/prelude.cal` builds the commons in Calliope: `length`, `map`,
+`filter`, `reverse`, `drop`. The driver and the tests prepend the prelude to the
+user program (path injected by CMake as `CALLIOPE_PRELUDE_PATH`).
+
+**Multi-line expressions** work via an **offside rule** (`Parser.margin`): inside
+a binding, a newline continues the expression when the next line is indented past
+the binding's name column; a line at/left of it ends the binding. "Open" tokens
+(trailing infix operator, `=`, `(`/`[`/`,`, `if`/`then`/`else`, `->`, `in`)
+continue unconditionally; inside `()`/`[]` newlines are insignificant. Notation
+runs (`c d e`) still don't cross lines.
+
+**Music IR is real now** (`music.{hpp,cpp}`): an index-pooled `Note | Rest | Seq
+| Par` tree (spec §3) that the evaluator produces as the program value. Notation
+desugars into it — a single pitch is a `Pitch`, but a run (`c d e`), a chord
+(`<c e g>`), `:+:`/`:=:`, and `r` build `Music`; durations on literals are
+honored (`c'8` = 1/8, default quarter). The builtin `Transposable Music` instance
+maps `^+`/`^-` over every note, preserving spelling + durations, so `c d e ^+ P5`
+transposes the phrase. `Modify` (tempo/key/dynamics controls) isn't built — those
+combinators don't exist yet. Typecheck of `:+:`/`:=:` is strict `Music -> Music ->
+Music`, so `c' :+: d'` (bare `Pitch` operands) type-errors even though eval would
+lift them; the canonical form is adjacency (`c d e`, a `Seq`).
+
+Not yet built: octave-resolution pass (absolute works inline; `#relative` needs
+it), the score IR + backends, more of the `.cal` prelude (music transforms,
+intervals, scales). Bootstrap: step 1 ✓ → step 2 ✓ → step 3 (started).
 
 ## Architecture (intended)
 
@@ -131,12 +170,15 @@ src/compiler/
   core/
     rational.{hpp,cpp}  exact Rational arithmetic (Duration/tuplet/tempo)
     pitch.{hpp,cpp}     spelled Pitch projections (semitones, diatonic_step, mk_pitch)
+    music.{hpp,cpp}     Music IR (Note|Rest|Seq|Par), index-pooled + transpose/show
     token.hpp           TokenKind + Token
     lexer.{hpp,cpp}     tokenize() — reserves the pitch lexical class
     ast.{hpp,cpp}       index-pooled AST (NodeKind/Node/NodeId) + printer
     parser.{hpp,cpp}    parse_program() — recursive descent + precedence climbing
     eval.{hpp,cpp}      tree-walking evaluator (Value/Env/Closure, builtins)
-    typecheck.{hpp,cpp} Hindley–Milner inference (unify + Algorithm W)
+    typecheck.{hpp,cpp} Hindley–Milner inference (unify + Algorithm W, SCC gen)
+standard_library/
+  prelude.cal           list commons in Calliope (length/map/filter/reverse/drop)
 third_party/libs/
   fluidsynth/         SoundFont synth (playback)
   sfizz/              SFZ sampler (playback)

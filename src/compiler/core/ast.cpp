@@ -16,6 +16,9 @@ const char* node_kind_name(NodeKind k) {
         case NodeKind::Directive: return "Directive";
         case NodeKind::TypeSig:   return "TypeSig";
         case NodeKind::Binding:   return "Binding";
+        case NodeKind::ClassDecl: return "ClassDecl";
+        case NodeKind::InstanceDecl: return "InstanceDecl";
+        case NodeKind::MethodSig: return "MethodSig";
         case NodeKind::PitchLit:  return "PitchLit";
         case NodeKind::RestLit:   return "RestLit";
         case NodeKind::IntLit:    return "IntLit";

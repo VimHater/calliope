@@ -88,4 +88,36 @@ void run_eval_tests() {
     CHECK(g.pitch.letter == 4);   // G
     CHECK(g.pitch.accidental == 0);
     CHECK(g.pitch.octave == 4);
+
+    // ---- type classes: runtime dispatch on the argument's type -----------
+    const char* desc =
+        "class Describable t where\n"
+        "  describe :: t -> Int\n"
+        "instance Describable Pitch where\n"
+        "  describe p = semitones p\n"
+        "instance Describable Bool where\n"
+        "  describe flag = if flag then 100 else 0\n";
+    // dispatches to the Pitch instance: semitones C4 = 48
+    CHECK(run(std::string(desc) + "main = describe c'", "main").i == 48);
+    // dispatches to the Bool instance
+    CHECK(run(std::string(desc) + "main = describe True", "main").i == 100);
+    CHECK(run(std::string(desc) + "main = describe False", "main").i == 0);
+    // same call site, both instances reachable through one method value
+    CHECK(run(std::string(desc) + "main = describe c' + describe True", "main").i == 148);
+
+    // ---- Music IR: notation desugars into Note/Rest/Seq/Par --------------
+    // a run of pitch literals sequences (bare letter = octave 3); durations honored
+    CHECK(run_main("c d e").kind == eval::ValueKind::Music);
+    CHECK_EQ_STR(eval::show_value(run_main("c'4 d'8 e'")),
+                 "((C4:1/4 :+: D4:1/8) :+: E4:1/4)");
+    // a chord sounds in parallel
+    CHECK_EQ_STR(eval::show_value(run_main("<c' e' g'>")),
+                 "((C4:1/4 :=: E4:1/4) :=: G4:1/4)");
+    // a bare rest is Music
+    CHECK_EQ_STR(eval::show_value(run_main("r")), "r:1/4");
+    // transposing a whole phrase via the builtin Transposable Music instance
+    CHECK_EQ_STR(eval::show_value(run_main("c d e ^+ P5")),
+                 "((G3:1/4 :+: A3:1/4) :+: B3:1/4)");
+    // explicit :+: / :=: combinators build the same IR (Pitch operands lift to Notes)
+    CHECK_EQ_STR(eval::show_value(run_main("c' :+: d'")), "(C4:1/4 :+: D4:1/4)");
 }

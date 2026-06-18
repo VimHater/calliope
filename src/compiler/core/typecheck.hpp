@@ -4,6 +4,7 @@
 
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 // Hindley–Milner type inference (Algorithm W) over a subset of the language:
@@ -31,6 +32,9 @@ struct TypeNode {
 struct Scheme {
     std::vector<int> vars;        // quantified variable numbers
     TypeId type = NoType;
+    // class constraints: (class name, quantified variable number), e.g.
+    // `Transposable a => a -> Interval -> a` is one (Transposable, a) pair.
+    std::vector<std::pair<std::string, int>> constraints;
 };
 
 struct Ctx {

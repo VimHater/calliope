@@ -27,6 +27,24 @@ void skip_newlines(Parser& p) {
     while (cur(p).kind == TokenKind::Newline) advance(p);
 }
 
+// The next token, looking past any newlines (does not advance).
+const Token& peek_nonnl(Parser& p) {
+    std::size_t i = p.pos;
+    while (i < p.toks.size() && p.toks[i].kind == TokenKind::Newline) i++;
+    if (i >= p.toks.size()) i = p.toks.size() - 1;
+    return p.toks[i];
+}
+
+// At a newline whose following line is indented past the current binding margin:
+// the expression continues onto it (offside rule). A line at or left of the
+// margin ends the binding.
+bool at_continuation(Parser& p) {
+    if (cur(p).kind != TokenKind::Newline) return false;
+    const Token& nx = peek_nonnl(p);
+    if (nx.kind == TokenKind::End) return false;
+    return nx.col > p.margin;
+}
+
 void error(Parser& p, const char* msg) {
     const Token& t = cur(p);
     char buf[256];
@@ -39,6 +57,7 @@ void error(Parser& p, const char* msg) {
 bool is_keyword(std::string_view s) {
     return s == "let" || s == "in" || s == "where" || s == "if" ||
            s == "then" || s == "else" || s == "data" || s == "type" || s == "of" ||
+           s == "class" || s == "instance" ||
            s == "and" || s == "or";  // 'and'/'or' are infix boolean operators
 }
 
@@ -106,13 +125,20 @@ NodeId parse_list(Parser& p) {
     Node n;
     n.kind = NodeKind::ListLit;
     n.tok = open;
+    int saved = p.margin;
+    p.margin = -1; // newlines insignificant inside the brackets
+    skip_newlines(p);
     if (cur(p).kind != TokenKind::RBracket) {
         n.kids.push_back(parse_expr(p, 0));
+        skip_newlines(p);
         while (cur(p).kind == TokenKind::Comma) {
             advance(p);
+            skip_newlines(p);
             n.kids.push_back(parse_expr(p, 0));
+            skip_newlines(p);
         }
     }
+    p.margin = saved;
     if (cur(p).kind == TokenKind::RBracket) advance(p);
     else error(p, "expected ']'");
     return ast_add(p.ast, n);
@@ -148,6 +174,7 @@ NodeId parse_lambda(Parser& p) {
     }
     if (cur(p).kind == TokenKind::Arrow) advance(p);
     else error(p, "expected '->' in lambda");
+    skip_newlines(p);
     n.kids.push_back(parse_expr(p, 0));
     n.extra = params;
     return ast_add(p.ast, n);
@@ -169,6 +196,7 @@ NodeId parse_let(Parser& p) {
     int bindings = static_cast<int>(n.kids.size());
     if (cur(p).kind == TokenKind::Ident && cur(p).text == "in") advance(p);
     else error(p, "expected 'in'");
+    skip_newlines(p);
     n.kids.push_back(parse_expr(p, 0)); // body
     n.extra = bindings;
     return ast_add(p.ast, n);
@@ -180,12 +208,17 @@ NodeId parse_if(Parser& p) {
     Node n;
     n.kind = NodeKind::If;
     n.tok = kw;
+    skip_newlines(p);
     n.kids.push_back(parse_expr(p, 0));
+    skip_newlines(p); // 'then' may sit on its own line
     if (cur(p).kind == TokenKind::Ident && cur(p).text == "then") advance(p);
     else error(p, "expected 'then'");
+    skip_newlines(p);
     n.kids.push_back(parse_expr(p, 0));
+    skip_newlines(p); // 'else' may sit on its own line
     if (cur(p).kind == TokenKind::Ident && cur(p).text == "else") advance(p);
     else error(p, "expected 'else'");
+    skip_newlines(p);
     n.kids.push_back(parse_expr(p, 0));
     return ast_add(p.ast, n);
 }
@@ -200,7 +233,13 @@ NodeId parse_primary(Parser& p) {
         case TokenKind::Upper: advance(p); return mk(p, NodeKind::Con, t);
         case TokenKind::LParen: {
             advance(p);
+            // inside brackets, newlines are insignificant until the closer.
+            int saved = p.margin;
+            p.margin = -1;
+            skip_newlines(p);
             NodeId e = parse_expr(p, 0);
+            skip_newlines(p);
+            p.margin = saved;
             if (cur(p).kind == TokenKind::RParen) advance(p);
             else error(p, "expected ')'");
             return e;
@@ -244,7 +283,14 @@ NodeId parse_app(Parser& p) {
     }
 
     std::vector<NodeId> args;
-    while (can_start_arg(p)) args.push_back(parse_primary(p));
+    for (;;) {
+        if (cur(p).kind == TokenKind::Newline) {
+            if (at_continuation(p)) skip_newlines(p);
+            else break;
+        }
+        if (!can_start_arg(p)) break;
+        args.push_back(parse_primary(p));
+    }
     if (args.empty()) return first;
     Node n;
     n.kind = NodeKind::App;
@@ -258,6 +304,11 @@ NodeId parse_app(Parser& p) {
 NodeId parse_expr(Parser& p, int min_prec) {
     NodeId lhs = parse_app(p);
     for (;;) {
+        // a continuation line may carry an infix operator for this expression
+        if (cur(p).kind == TokenKind::Newline) {
+            if (at_continuation(p)) skip_newlines(p);
+            else break;
+        }
         Token t = cur(p);
         int prec;
         bool right;
@@ -298,6 +349,7 @@ NodeId parse_expr(Parser& p, int min_prec) {
         }
 
         int next_min = right ? prec : prec + 1;
+        skip_newlines(p); // operator's right operand may start on the next line
         NodeId rhs = parse_expr(p, next_min);
         Node n;
         n.kind = NodeKind::BinOp;
@@ -317,6 +369,10 @@ NodeId parse_binding(Parser& p, bool allow_where) {
     n.kind = NodeKind::Binding;
     n.tok = name;
 
+    // continuation lines of this binding's body must be indented past the name.
+    int saved_margin = p.margin;
+    p.margin = name.col;
+
     int params = 0;
     while (cur(p).kind == TokenKind::Ident && !is_keyword(cur(p).text)) {
         n.kids.push_back(mk(p, NodeKind::Param, cur(p)));
@@ -328,6 +384,7 @@ NodeId parse_binding(Parser& p, bool allow_where) {
     if (cur(p).kind == TokenKind::Equals) advance(p);
     else error(p, "expected '=' in binding");
 
+    skip_newlines(p); // body may begin on the next (indented) line
     NodeId body = parse_expr(p, 0);
 
     if (allow_where) {
@@ -350,6 +407,7 @@ NodeId parse_binding(Parser& p, bool allow_where) {
     }
 
     n.kids.push_back(body);
+    p.margin = saved_margin;
     return ast_add(p.ast, n);
 }
 
@@ -407,9 +465,125 @@ NodeId parse_type_sig(Parser& p, Token name) {
     return ast_add(p.ast, n);
 }
 
+// A method binding inside an `instance` block. Either an ordinary prefix form
+// (`name params = body`) or an infix operator definition (`lhs ^+ rhs = body`).
+NodeId parse_method_binding(Parser& p) {
+    bool infix = cur(p).kind == TokenKind::Ident &&
+                 (peek_at(p, 1).kind == TokenKind::Operator ||
+                  peek_at(p, 1).kind == TokenKind::Less ||
+                  peek_at(p, 1).kind == TokenKind::Greater);
+    if (!infix) return parse_binding(p, false);
+
+    Token lhs = cur(p);
+    advance(p);
+    Token op = cur(p);
+    advance(p); // operator
+    Node n;
+    n.kind = NodeKind::Binding;
+    n.tok = op;
+    n.kids.push_back(mk(p, NodeKind::Param, lhs));
+    if (cur(p).kind == TokenKind::Ident && !is_keyword(cur(p).text)) {
+        n.kids.push_back(mk(p, NodeKind::Param, cur(p)));
+        advance(p);
+    } else {
+        error(p, "expected right operand parameter in operator definition");
+    }
+    n.extra = 2;
+    if (cur(p).kind == TokenKind::Equals) advance(p);
+    else error(p, "expected '=' in method definition");
+    n.kids.push_back(parse_expr(p, 0));
+    return ast_add(p.ast, n);
+}
+
+// One method signature line in a `class` body: `(^+) :: a -> Interval -> a`
+// or `describe :: a -> Int`. The signature tokens are kept raw (TypeAtom) and
+// parsed by the typechecker's mini type parser.
+NodeId parse_method_sig(Parser& p) {
+    Node n;
+    n.kind = NodeKind::MethodSig;
+    if (cur(p).kind == TokenKind::LParen) {
+        advance(p);
+        n.tok = cur(p); // operator name inside parens
+        advance(p);
+        if (cur(p).kind == TokenKind::RParen) advance(p);
+        else error(p, "expected ')' after operator name");
+    } else {
+        n.tok = cur(p);
+        advance(p);
+    }
+    if (cur(p).kind == TokenKind::ColonColon) advance(p);
+    else error(p, "expected '::' in method signature");
+    while (cur(p).kind != TokenKind::Newline && cur(p).kind != TokenKind::End) {
+        n.kids.push_back(mk(p, NodeKind::TypeAtom, cur(p)));
+        advance(p);
+    }
+    return ast_add(p.ast, n);
+}
+
+bool sig_starts(const Token& t) {
+    return t.kind == TokenKind::LParen ||
+           (t.kind == TokenKind::Ident && !is_keyword(t.text));
+}
+
+// class Name var where <method signatures>
+NodeId parse_class(Parser& p) {
+    advance(p); // 'class'
+    Node n;
+    n.kind = NodeKind::ClassDecl;
+    if (cur(p).kind == TokenKind::Upper) { n.tok = cur(p); advance(p); }
+    else error(p, "expected class name");
+    // single type variable
+    if (cur(p).kind == TokenKind::Ident && !is_keyword(cur(p).text))
+        n.kids.push_back(mk(p, NodeKind::Param, cur(p))), advance(p);
+    else error(p, "expected class type variable");
+    if (cur(p).kind == TokenKind::Ident && cur(p).text == "where") advance(p);
+    else error(p, "expected 'where' in class declaration");
+
+    skip_newlines(p);
+    if (sig_starts(cur(p))) {
+        int col = cur(p).col;
+        for (;;) {
+            skip_newlines(p);
+            if (!sig_starts(cur(p)) || cur(p).col != col) break;
+            n.kids.push_back(parse_method_sig(p));
+        }
+    }
+    return ast_add(p.ast, n);
+}
+
+// instance Class Type where <method bindings>
+NodeId parse_instance(Parser& p) {
+    advance(p); // 'instance'
+    Node n;
+    n.kind = NodeKind::InstanceDecl;
+    if (cur(p).kind == TokenKind::Upper) { n.tok = cur(p); advance(p); }
+    else error(p, "expected class name in instance");
+    Node ty;
+    ty.kind = NodeKind::Con;
+    if (cur(p).kind == TokenKind::Upper) { ty.tok = cur(p); advance(p); }
+    else error(p, "expected instance type");
+    n.kids.push_back(ast_add(p.ast, ty));
+    if (cur(p).kind == TokenKind::Ident && cur(p).text == "where") advance(p);
+    else error(p, "expected 'where' in instance declaration");
+
+    skip_newlines(p);
+    if (cur(p).kind == TokenKind::Ident && !is_keyword(cur(p).text)) {
+        int col = cur(p).col;
+        for (;;) {
+            skip_newlines(p);
+            if (cur(p).kind != TokenKind::Ident || is_keyword(cur(p).text)) break;
+            if (cur(p).col != col) break;
+            n.kids.push_back(parse_method_binding(p));
+        }
+    }
+    return ast_add(p.ast, n);
+}
+
 NodeId parse_toplevel(Parser& p) {
     Token t = cur(p);
     if (t.kind == TokenKind::Hash) return parse_directive(p);
+    if (t.kind == TokenKind::Ident && t.text == "class")    return parse_class(p);
+    if (t.kind == TokenKind::Ident && t.text == "instance") return parse_instance(p);
     if (t.kind == TokenKind::Ident) {
         if (peek_at(p, 1).kind == TokenKind::ColonColon) {
             advance(p); // name

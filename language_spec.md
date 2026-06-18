@@ -172,6 +172,17 @@ overloaded for this — it stays ordinary numeric arithmetic; transposition is i
 own operator, and `Transposable` is a plain single-parameter class (result type
 equals the left operand), so no multi-parameter classes are needed (O13).
 
+> **Type-variable spelling (lexical consequence of §2).** A type variable is an
+> ordinary identifier, so it is bound by the same rule as every other name: it
+> **cannot be spelled like a pitch** (`a`–`g`, `r`, `s`). The classic Haskell
+> `class Transposable a` therefore has to choose a non-pitch variable in Calliope
+> source — convention is `t`: `class Transposable t where (^+) :: t -> Interval ->
+> t`. (Examples in this spec still use `a` for familiarity; read them with this
+> substitution.) Implemented: single-parameter `class`/`instance` declarations,
+> qualified schemes, instance resolution, and runtime first-argument dispatch.
+> `Transposable` ships as a builtin class with a builtin `Pitch` instance; user
+> code adds the others (e.g. `instance Transposable Music`).
+
 > **Open question (O2):** do we keep enharmonic spelling (C# ≠ Db) for correct
 > notation, or collapse to 12-TET pitch numbers for simplicity? Spelling matters
 > for LilyPond/MusicXML output; pitch numbers are easier for playback. Proposal:

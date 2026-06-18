@@ -14,6 +14,10 @@ struct Parser {
     std::size_t pos = 0;
     ast::Ast ast;
     std::vector<std::string> errors;
+    // Offside margin for the binding currently being parsed: a newline inside an
+    // expression continues it only when the next line is indented past this
+    // column. Top-level bindings use 0 (any indented continuation line counts).
+    int margin = 0;
 };
 
 // Parse a token stream into an AST. If `errors_out` is non-null it receives any

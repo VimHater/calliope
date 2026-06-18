@@ -74,4 +74,50 @@ void run_parser_tests() {
     CHECK_EQ_STR(
         sx("fn = x\n  where\n    x = c"),
         "(Program (Binding 'fn' (Let 'fn' (Binding 'x' (PitchLit 'c')) (Var 'x'))))");
+
+    // class declaration: name, type variable (Param), method signatures
+    // (type variables can't be pitch letters, so we use 't')
+    CHECK_EQ_STR(
+        sx("class Describable t where\n  describe :: t -> Int"),
+        "(Program (ClassDecl 'Describable' (Param 't') "
+        "(MethodSig 'describe' (TypeAtom 't') (TypeAtom '->') (TypeAtom 'Int'))))");
+
+    // instance declaration: class, instance type (Con), method bindings
+    CHECK_EQ_STR(
+        sx("instance Describable Pitch where\n  describe p = semitones p"),
+        "(Program (InstanceDecl 'Describable' (Con 'Pitch') "
+        "(Binding 'describe' (Param 'p') (App 'semitones' (Var 'semitones') (Var 'p')))))");
+
+    // an operator-defined instance method (infix form)
+    CHECK_EQ_STR(
+        sx("instance Transposable Music where\n  m ^+ i = up m i"),
+        "(Program (InstanceDecl 'Transposable' (Con 'Music') "
+        "(Binding '^+' (Param 'm') (Param 'i') "
+        "(App 'up' (Var 'up') (Var 'm') (Var 'i')))))");
+
+    // ---- multi-line expressions (offside continuation) -------------------
+    // application continues onto an indented line
+    CHECK_EQ_STR(
+        sx("main = foo\n  bar"),
+        "(Program (Binding 'main' (App 'foo' (Var 'foo') (Var 'bar'))))");
+
+    // a trailing operator carries the expression onto the next line
+    CHECK_EQ_STR(
+        sx("main = 1 +\n  2"),
+        "(Program (Binding 'main' (BinOp '+' (IntLit '1') (IntLit '2'))))");
+
+    // if / then / else split across lines
+    CHECK_EQ_STR(
+        sx("main = if p\n  then x\n  else y"),
+        "(Program (Binding 'main' (If 'if' (Var 'p') (Var 'x') (Var 'y'))))");
+
+    // a binding body may start on the next (indented) line
+    CHECK_EQ_STR(
+        sx("foo =\n  subj"),
+        "(Program (Binding 'foo' (Var 'subj')))");
+
+    // a sibling binding at the same column is NOT swallowed as a continuation
+    CHECK_EQ_STR(
+        sx("foo = x\nbar = y"),
+        "(Program (Binding 'foo' (Var 'x')) (Binding 'bar' (Var 'y')))");
 }
