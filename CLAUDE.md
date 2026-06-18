@@ -11,7 +11,7 @@ phrases (invert, retrograde, sequence, transpose), not note-by-note data entry.
 ```haskell
 -- the intent we are designing for:
 development :: Phrase -> Phrase
-development subject = subject `par` (invert subject + P5)
+development subject = subject `par` (invert subject ^+ P5)
 ```
 
 - **Surface syntax:** Haskell-like (functions, types, type classes, purity).
@@ -41,12 +41,13 @@ Frontend first cut exists; nothing executes music yet.
   clean).
 - `third_party/` — vendored dependencies already in place (see below).
 
-Done: lex → parse → AST for bindings, type sigs, `#` directives, pitch-run
+Done: arithmetic core (`Rational`, `Pitch` projections — bootstrap step 1,
+spec §14.4); lex → parse → AST for bindings, type sigs, `#` directives, pitch-run
 sequencing, application, infix/backtick operators, lists, chords, lambda,
-`let`/`if`, `where` (column-aligned, desugars to `let`).
-Not yet built: octave-resolution pass, typecheck, desugar to Music IR, eval,
-score IR, backends. Next natural step is the octave-resolution pass over
-`RawPitch` (currently pitches are kept as raw lexeme text in `PitchLit.tok`).
+`let`/`if`, `where` (column-aligned, desugars to `let`). 73 tests green.
+Not yet built: evaluator + typechecker (plain single-param classes), octave-resolution
+pass, desugar to Music IR, score IR, backends, `.cal` prelude. Bootstrap
+order is step 1 (done) → step 2 (eval+types) → step 3 (load prelude).
 
 ## Architecture (intended)
 
@@ -93,9 +94,22 @@ Two IRs, designed independently (spec §13):
   context (key/tempo/dynamics/instrument) is *never* a directive — it's the §8
   term-level combinators (`inKey`, `tempo`, …) producing `Control` nodes. Key is
   metadata; letters stay literal (`fis` even in D major). See spec §5.1–5.3.
-- Still open: O8 pitch spelling · O9 backend priority · O11 time model
-  (leaning exact rationals → ticks at the score-IR boundary) · O12 preprocessor
-  system design.
+- **Stdlib in Calliope, thin C++ core (O-boundary, §14).** The C++ core exposes
+  only axioms: `Int`/`Rational` + ops; `Pitch` *projections* (`semitones`,
+  `diatonicStep`, `mkPitch`, `chromaticOf`); the Music IR constructors; the
+  evaluator; backend FFI. **All music theory — intervals, scales, chords,
+  transforms — is Calliope stdlib** (`.cal` prelude). No `Float` in the language
+  (only at the synthesis boundary). Pitch is spelled (C♯≠D♭).
+- **Transposition operator `^+`/`^-` (O13).** Dedicated operator via a plain
+  single-parameter class `Transposable a` (`(^+) :: a -> Interval -> a`), instances
+  `Pitch`/`Music`. *Not* an overload of `+` — `+` stays numeric. So the type
+  checker needs only vanilla single-parameter classes — **no** MPTC/fundeps.
+  Intervals are a monoid (`<>`); `intervalBetween :: Pitch -> Pitch -> Interval`.
+- **Bootstrap order:** (1) number+pitch primitives [arithmetic first] →
+  (2) evaluator + typechecker → (3) load `.cal` prelude. Step (1) is standalone
+  C++ with its own tests.
+- Still open: O9 backend priority · O11 time model (leaning exact rationals →
+  ticks at the score-IR boundary) · O12 preprocessor system design.
 
 ## Repo layout
 
@@ -103,10 +117,12 @@ Two IRs, designed independently (spec §13):
 src/compiler/
   compiler.cpp        driver: tokenize + parse a .cal file, dump tokens & AST
   core/
-    token.hpp         TokenKind + Token
-    lexer.{hpp,cpp}   tokenize() — reserves the pitch lexical class
-    ast.{hpp,cpp}     index-pooled AST (NodeKind/Node/NodeId) + printer
-    parser.{hpp,cpp}  parse_program() — recursive descent + precedence climbing
+    rational.{hpp,cpp} exact Rational arithmetic (Duration/tuplet/tempo)
+    pitch.{hpp,cpp}    spelled Pitch projections (semitones, diatonic_step, mk_pitch)
+    token.hpp          TokenKind + Token
+    lexer.{hpp,cpp}    tokenize() — reserves the pitch lexical class
+    ast.{hpp,cpp}      index-pooled AST (NodeKind/Node/NodeId) + printer
+    parser.{hpp,cpp}   parse_program() — recursive descent + precedence climbing
 third_party/libs/
   fluidsynth/         SoundFont synth (playback)
   sfizz/              SFZ sampler (playback)

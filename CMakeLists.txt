@@ -9,11 +9,18 @@ if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Debug)
 endif()
 
-add_executable(calliope
-    src/compiler/compiler.cpp
+# Core sources shared by the driver and the test binary.
+set(CALLIOPE_CORE
+    src/compiler/core/rational.cpp
+    src/compiler/core/pitch.cpp
     src/compiler/core/lexer.cpp
     src/compiler/core/ast.cpp
     src/compiler/core/parser.cpp
+)
+
+add_executable(calliope
+    src/compiler/compiler.cpp
+    ${CALLIOPE_CORE}
 )
 
 target_include_directories(calliope PRIVATE src/compiler)
@@ -31,10 +38,10 @@ add_executable(calliope_tests
     tests/test.cpp
     tests/test_lexer.cpp
     tests/test_parser.cpp
+    tests/test_rational.cpp
+    tests/test_pitch.cpp
     tests/test_main.cpp
-    src/compiler/core/lexer.cpp
-    src/compiler/core/ast.cpp
-    src/compiler/core/parser.cpp
+    ${CALLIOPE_CORE}
 )
 
 target_include_directories(calliope_tests PRIVATE src/compiler/core tests)

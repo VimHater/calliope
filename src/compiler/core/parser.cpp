@@ -55,6 +55,7 @@ bool op_fixity(std::string_view op, int& prec, bool& right) {
     if (op == "$")   { prec = 0; right = true;  return true; }
     if (op == ":=:") { prec = 4; right = true;  return true; }
     if (op == ":+:") { prec = 5; right = true;  return true; }
+    if (op == "^+" || op == "^-") { prec = 6; right = false; return true; } // transpose
     if (op == "+" || op == "-") { prec = 6; right = true;  return true; }
     if (op == "*" || op == "/") { prec = 7; right = false; return true; }
     if (op == ".")   { prec = 9; right = true;  return true; }

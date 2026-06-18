@@ -23,7 +23,7 @@ A composer thinks:
 -- "the development takes the subject, inverts it,
 --  and sequences it against itself at the fifth"
 development :: Phrase -> Phrase
-development subject = subject `par` (invert subject + P5)
+development subject = subject `par` (invert subject ^+ P5)
 ```
 
 The language is built on two convictions:
@@ -92,7 +92,7 @@ The motto example needs no delimiter and no sigil:
 subject :: Phrase
 subject = c'4 d'8 e'8 g'4 a'2
 
-development subject = subject `par` (invert subject + P5)
+development subject = subject `par` (invert subject ^+ P5)
 ```
 
 Here `subject` is a normal identifier (not pitch-shaped), and the `c d e g a`
@@ -153,19 +153,24 @@ M2 M3 M6 M7        -- major
 m2 m3 m6 m7        -- minor
 A4 d5              -- augmented / diminished (tritone spellings)
 
--- Pitch + Interval = Pitch
-(+) :: Pitch -> Interval -> Pitch
--- Pitch - Pitch = Interval
-(-) :: Pitch -> Pitch -> Interval
--- Intervals add
-(+) :: Interval -> Interval -> Interval   -- M3 + m3 = P5
+-- Transposition: "shift a thing up by an interval". A pitch is a point, an
+-- interval is a vector; '^+' moves up, '^-' moves down.
+class Transposable a where
+  (^+) :: a -> Interval -> a       -- result type = the thing being shifted
+  (^-) :: a -> Interval -> a
 
--- And the same `+` lifts over whole pieces of music:
-(+) :: Music -> Interval -> Music         -- transpose every pitch
+instance Transposable Pitch        -- c' ^+ P5  = g'
+instance Transposable Music        -- transpose every pitch in a phrase
+
+intervalBetween :: Pitch -> Pitch -> Interval   -- the gap between two pitches
+M3 <> m3        -- intervals are a monoid: M3 <> m3 = P5
 ```
 
-This is what makes `invert subject + P5` legal: `invert subject :: Music`, and
-`+ P5` transposes the whole result up a perfect fifth.
+This is what makes `invert subject ^+ P5` legal: `invert subject :: Music`, and
+`^+ P5` transposes the whole result up a perfect fifth. Note `+` is **not**
+overloaded for this — it stays ordinary numeric arithmetic; transposition is its
+own operator, and `Transposable` is a plain single-parameter class (result type
+equals the left operand), so no multi-parameter classes are needed (O13).
 
 > **Open question (O2):** do we keep enharmonic spelling (C# ≠ Db) for correct
 > notation, or collapse to 12-TET pitch numbers for simplicity? Spelling matters
@@ -394,11 +399,11 @@ These let development sections read as English:
 ```haskell
 -- a stretto: the subject entering against itself, a fifth up, delayed a bar
 stretto :: Phrase -> Phrase
-stretto subj = subj `par` (rest 1 :+: (subj + P5))
+stretto subj = subj `par` (rest 1 :+: (subj ^+ P5))
 
 -- a classic fugal answer (tonal): invert and answer at the fifth
 answer :: Phrase -> Phrase
-answer = (+ P5) . invert
+answer = (^+ P5) . invert
 ```
 
 ---
@@ -437,21 +442,24 @@ Calliope's non-musical syntax is a pragmatic subset of Haskell:
 - **Type classes:** at least the ones the music algebra needs —
   `Transposable`, `Invertible`, `Reversible`, `Temporal` (`durationOf`).
 - **Lists & ranges, lambdas, guards, pattern matching, `if/then/else`.**
-- **Operators** with fixity declarations (`:+:` `:=:` `+` need precedences so
-  `m1 :+: m2 + P5` parses as intended).
+- **Operators** with fixity declarations (`:+:` `:=:` `^+` need precedences so
+  `m1 :+: m2 ^+ P5` parses as intended).
 
 > **Decided (O4 / O6):** full **Hindley–Milner** type inference, with parametric
 > polymorphism and (user-definable) type classes — so signatures are optional and
 > the music algebra's classes (`Transposable`, `Invertible`, …) are real, not
-> built-in special cases. **No laziness (O7):** evaluation is strict/eager. So:
-> *typed like Haskell, evaluated like ML.* See §13 for the execution model.
+> built-in special cases. Classes stay **single-parameter** (no multi-param
+> classes / fundeps needed — O13), keeping inference plain. **No laziness (O7):**
+> evaluation is strict/eager. So: *typed like Haskell, evaluated like ML.* See §13
+> for the execution model and §14 for the core/stdlib split.
 
 Proposed minimum operator fixities:
 
 ```haskell
-infixr 6 +        -- transposition / interval addition
+infixl 6 ^+ ^-    -- transposition up / down (binds tighter than seq/par)
 infixr 5 :+:      -- sequence
 infixr 4 :=:      -- parallel  (binds looser than sequence)
+-- numeric +, -, *, / keep their ordinary arithmetic fixities, unrelated to music
 ```
 
 ---
@@ -545,6 +553,12 @@ Decisions we should make explicitly:
   *read or assembled*, never what the music *is*.
 - **O11 — Time model.** Durations as exact rationals (recommended — avoids
   floating-point drift in tuplets/ties) vs. ticks-per-quarter integer grid.
+- **O13 — Transposition operator. _Decided:_** a dedicated operator `^+` (up) /
+  `^-` (down) via a plain **single-parameter** class `Transposable a` (§14.3), not
+  an overload of `+`. `+` stays purely numeric. This keeps the type checker on
+  vanilla single-parameter classes — **no** MPTC / fundeps. Open sub-question: do
+  we want a scaling operator for `augment`/`diminish` (Rational × Music), or keep
+  those as named functions?
 
 ---
 
@@ -554,7 +568,7 @@ Decisions we should make explicitly:
 |---|---|
 | "the subject" | a named `Phrase` value, `subject` |
 | "against itself" | `par` / `:=:` |
-| "at the fifth" | `+ P5` |
+| "at the fifth" | `^+ P5` |
 | "inverted" | `invert` |
 | "in retrograde" | `retrograde` |
 | "augmented" | `augment 2` |
@@ -624,14 +638,100 @@ the IR algebra is small and hot:
 NOTE / REST          pop dur (+ pitch)  → push a Prim
 SEQ / PAR            pop b, a           → a :+: b   /   a :=: b
 MODIFY c             wrap TOS in a Control
-TRANSPOSE            pop interval, m    → shifted m      (the `+ P5`)
+TRANSPOSE            pop interval, m    → shifted m      (the `^+ P5`)
 INVERT / RETRO / AUGMENT r              structural transforms
 ```
 
 `subject = c'4 d'8` compiles to
 `PUSH_DUR 1/4 · PUSH_PITCH c' · NOTE · PUSH_DUR 1/8 · PUSH_PITCH d' · NOTE · SEQ`;
-`subject `par` (invert subject + P5)` to
+`subject `par` (invert subject ^+ P5)` to
 `LOAD 0 · LOAD 0 · INVERT · PUSH_INTERVAL P5 · TRANSPOSE · PAR`.
 
 Note this VM still only *builds the IR tree*; layer 2 is unchanged. So adopting
 it later is non-breaking.
+
+---
+
+## 14. Core boundary & the standard library
+
+The goal: **the standard library is written in Calliope.** The C++ core provides
+only what *cannot* be expressed in the language; everything derivable — all music
+theory — is Calliope source loaded as the prelude.
+
+### 14.1 What is primitive (C++ core)
+
+A **thin** core (O-boundary decided). Just the axioms:
+
+1. **Numbers.** `Int` (64-bit signed) and `Rational` (exact, normalized — the
+   representation of `Duration`, tuplets, tempo scaling; O11). Primitive ops:
+   `+ - * /`, comparison, normalize/`gcd`, `Int → Rational`. **No `Float` in the
+   language** — floats appear only at the synthesis boundary (Hz, seconds, gain).
+2. **Pitch representation.** `Pitch` is *spelled* (letter + accidental + octave;
+   C♯ ≠ D♭, O8). The core exposes only its projections and constructors — enough
+   for stdlib to build all interval math:
+   - `semitones    :: Pitch -> Int`   — chromatic position (for playback)
+   - `diatonicStep :: Pitch -> Int`   — staff position (octave*7 + letter)
+   - `mkPitch      :: Int -> Int -> Pitch`  — from (diatonicStep, accidental)
+   - `chromaticOf  :: Int -> Int`     — semitones of a diatonic step, ♮
+3. **Music IR constructors.** `note`, `rest`, `:+:`, `:=:`, `modify` (§3) — the
+   tree the lexer desugars into and the renderer consumes.
+4. **Evaluation runtime** (application, pattern match, typeclass dispatch,
+   recursion) and **backend FFI** (`play`, `renderMidi`, `renderXml`).
+
+That is the whole non-Calliope surface. Note interval/scale/chord arithmetic is
+**not** here — it is stdlib.
+
+### 14.2 What is derivable (Calliope stdlib)
+
+Written in `.cal`, loaded as prelude:
+
+- **Prelude:** classes `Eq Ord Add Mul Fractional Enum Semigroup Monoid`;
+  `id const flip (.) ($)`; `Bool`, `Maybe`, `Either`; lists (`map foldr foldl ++
+  concat length reverse take drop zip zipWith replicate sum product elem all
+  any`), bounded `cycle`/`iterate` via `take`; `Ratio` (`%`, numerator,
+  denominator).
+- **Pitch / Interval** (the arithmetic, built on §14.1's projections): named
+  intervals `P1 m2 M2 … P8` + compounds; `intervalBetween`, `transpose`/`up`/
+  `down`, `octaveShift`, `addInterval`, `invert` (complement), `enharmonic`.
+- **Scale / Key:** `major`, `minor` (natural/harmonic/melodic), the modes,
+  pentatonic, chromatic, whole-tone; `scalePitches`, `degree :: Key -> Int ->
+  Pitch` (the scale-degree layer), key signatures.
+- **Chord / Harmony:** triads, sevenths, extensions; `chordFrom root quality`,
+  inversions, voicing, arpeggiate; roman numerals in key (later).
+- **Duration / Rhythm:** named `whole half quarter eighth …`, `dotted`,
+  `tuplet n m`, `triplet`, `tie` — arithmetic reuses `Rational`.
+- **Compose** (§6–§8): `line chord par times delay rest`; transforms `invert
+  retrograde transpose augment diminish sequenceBy`; `canon round ostinato`;
+  context `tempo dynamic instrument inKey withArt` + named tempi/instruments/
+  dynamics.
+
+### 14.3 Transposition operator (O13)
+
+Transposition is **not** an overload of numeric `+`. Pitches are points and
+intervals are vectors; shifting a point by a vector is its own operator, `^+`
+(up) / `^-` (down), via a plain **single-parameter** class:
+
+```haskell
+class Transposable a where
+  (^+) :: a -> Interval -> a       -- result type = the thing being shifted
+  (^-) :: a -> Interval -> a
+  m ^- i = m ^+ invert i           -- default: down = up by the complement
+
+instance Transposable Pitch        -- c' ^+ P5 = g'
+instance Transposable Music        -- transpose every pitch in a phrase
+```
+
+Because the result type always equals the left operand, ordinary Hindley–Milner
+infers `subject ^+ P5 :: Music` with no annotation and **no** multi-parameter
+classes or functional dependencies. Numeric `+ - * /` stay purely arithmetic and
+unrelated. Intervals compose as a monoid (`M3 <> m3 = P5`); the gap between two
+pitches is `intervalBetween :: Pitch -> Pitch -> Interval`. The stdlib `transpose`
+is just `flip (^+)`, and `invert subject ^+ P5` reads as a composer means it.
+
+### 14.4 Bootstrapping order
+
+The stdlib can't run until the core does. Implementation order:
+**(1)** number + pitch primitives (this is "arithmetic first") →
+**(2)** evaluator + typechecker (plain single-parameter type classes) →
+**(3)** load the `.cal` prelude. Step (1) is self-contained C++ with its own
+tests, independent of (2).

@@ -31,7 +31,7 @@ int main(int argc, char** argv) {
             "subject :: Phrase\n"
             "subject = c d e g a\n"
             "\n"
-            "development subject = subject `par` (invert subject + P5)\n"
+            "development subject = subject `par` (invert subject ^+ P5)\n"
             "\n"
             "frere = line [jacques, dormez]\n"
             "  where\n"

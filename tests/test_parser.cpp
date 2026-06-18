@@ -44,6 +44,12 @@ void run_parser_tests() {
         "(Program (Binding 'main' (App 'line' (Var 'line') "
         "(ListLit '[' (Var 'foo') (Var 'bar')))))");
 
+    // transposition operator binds tighter than sequence (:+: is 5, ^+ is 6)
+    CHECK_EQ_STR(
+        sx("main = subj :+: motif ^+ P5"),
+        "(Program (Binding 'main' (BinOp ':+:' (Var 'subj') "
+        "(BinOp '^+' (Var 'motif') (Con 'P5')))))");
+
     // chord
     CHECK_EQ_STR(
         sx("main = <c e g>"),
