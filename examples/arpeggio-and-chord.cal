@@ -1,0 +1,12 @@
+-- arpeggio-and-chord.cal — build chords and arpeggios from a list of pitches.
+--
+-- `notes` lifts pitches to notes; `line` plays them in sequence (an arpeggio),
+-- `chord` sounds them together (a block chord).
+
+triad = [c', e', g']
+
+arpeggio = line  (notes triad)   -- C, then E, then G
+block    = chord (notes triad)   -- C, E, G all at once
+
+-- arpeggiate the triad, then strike it as a chord
+main = arpeggio :+: block

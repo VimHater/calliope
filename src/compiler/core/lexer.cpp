@@ -122,6 +122,20 @@ std::vector<Token> tokenize(std::string_view src) {
             continue;
         }
 
+        // '<'/'>' are chord delimiters, but '<='/'>=' are comparison operators
+        if ((c == '<' || c == '>') && peek(1) == '=') {
+            adv(); adv();
+            push(TokenKind::Operator, start, ln, cl);
+            continue;
+        }
+
+        // pipe '|>' — '>' is not an operator char, so spell it out here
+        if (c == '|' && peek(1) == '>') {
+            adv(); adv();
+            push(TokenKind::Operator, start, ln, cl);
+            continue;
+        }
+
         // string literal
         if (c == '"') {
             adv();

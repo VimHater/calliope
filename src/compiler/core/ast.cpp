@@ -31,8 +31,14 @@ const char* node_kind_name(NodeKind k) {
         case NodeKind::Lambda:    return "Lambda";
         case NodeKind::Let:       return "Let";
         case NodeKind::If:        return "If";
+        case NodeKind::Case:      return "Case";
+        case NodeKind::Alt:       return "Alt";
         case NodeKind::ListLit:   return "ListLit";
         case NodeKind::Chord:     return "Chord";
+        case NodeKind::PatVar:    return "PatVar";
+        case NodeKind::PatWild:   return "PatWild";
+        case NodeKind::PatInt:    return "PatInt";
+        case NodeKind::PatCon:    return "PatCon";
         case NodeKind::Param:     return "Param";
         case NodeKind::TypeAtom:  return "TypeAtom";
         case NodeKind::Error:     return "Error";

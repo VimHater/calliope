@@ -57,7 +57,7 @@ void error(Parser& p, const char* msg) {
 bool is_keyword(std::string_view s) {
     return s == "let" || s == "in" || s == "where" || s == "if" ||
            s == "then" || s == "else" || s == "data" || s == "type" || s == "of" ||
-           s == "class" || s == "instance" ||
+           s == "class" || s == "instance" || s == "case" ||
            s == "and" || s == "or";  // 'and'/'or' are infix boolean operators
 }
 
@@ -73,9 +73,11 @@ NodeId mk(Parser& p, NodeKind k, const Token& t) {
 // declarations come later; see language_spec.md §9.
 bool op_fixity(std::string_view op, int& prec, bool& right) {
     if (op == "$")   { prec = 0; right = true;  return true; }
+    if (op == "|>")  { prec = 1; right = false; return true; } // pipe: x |> f = f x
     if (op == "==" || op == "<" || op == ">" || op == "/=" ||
         op == "<=" || op == ">=") { prec = 4; right = false; return true; } // compare
     if (op == ":=:") { prec = 3; right = true;  return true; }
+    if (op == ":")   { prec = 5; right = true;  return true; } // cons
     if (op == ":+:") { prec = 5; right = true;  return true; }
     if (op == "^+" || op == "^-") { prec = 6; right = false; return true; } // transpose
     if (op == "+" || op == "-") { prec = 6; right = false; return true; } // left-assoc
@@ -89,6 +91,9 @@ NodeId parse_expr(Parser& p, int min_prec);
 NodeId parse_app(Parser& p);
 NodeId parse_primary(Parser& p);
 NodeId parse_binding(Parser& p, bool allow_where);
+NodeId parse_pattern(Parser& p);
+NodeId parse_case(Parser& p);
+NodeId parse_type_sig(Parser& p, Token name);
 std::vector<NodeId> parse_block(Parser& p);
 
 // ---- predicates ---------------------------------------------------------
@@ -223,6 +228,101 @@ NodeId parse_if(Parser& p) {
     return ast_add(p.ast, n);
 }
 
+// ---- patterns -----------------------------------------------------------
+NodeId parse_pattern_atom(Parser& p) {
+    Token t = cur(p);
+    switch (t.kind) {
+        case TokenKind::Int: advance(p); return mk(p, NodeKind::PatInt, t);
+        case TokenKind::Ident:
+            advance(p);
+            if (t.text == "_") return mk(p, NodeKind::PatWild, t);
+            return mk(p, NodeKind::PatVar, t);
+        case TokenKind::Upper:
+            advance(p);
+            return mk(p, NodeKind::PatCon, t); // nullary constructor (True/False/…)
+        case TokenKind::LBracket: {
+            advance(p);
+            if (cur(p).kind == TokenKind::RBracket) advance(p);
+            else error(p, "expected ']' in pattern (only [] is supported)");
+            return mk(p, NodeKind::PatCon, t); // tok '[' stands in for the empty list
+        }
+        case TokenKind::LParen: {
+            advance(p);
+            NodeId inner = parse_pattern(p);
+            if (cur(p).kind == TokenKind::RParen) advance(p);
+            else error(p, "expected ')' in pattern");
+            return inner;
+        }
+        default:
+            error(p, "expected a pattern");
+            advance(p);
+            return mk(p, NodeKind::Error, t);
+    }
+}
+
+// patterns: cons ':' is right-associative, like the expression operator
+NodeId parse_pattern(Parser& p) {
+    NodeId left = parse_pattern_atom(p);
+    if (cur(p).kind == TokenKind::Operator && cur(p).text == ":") {
+        Token op = cur(p);
+        advance(p);
+        NodeId right = parse_pattern(p);
+        Node n;
+        n.kind = NodeKind::PatCon;
+        n.tok = op;
+        n.kids.push_back(left);
+        n.kids.push_back(right);
+        return ast_add(p.ast, n);
+    }
+    return left;
+}
+
+bool starts_pattern(const Token& t) {
+    return t.kind == TokenKind::Int || t.kind == TokenKind::Upper ||
+           t.kind == TokenKind::LBracket || t.kind == TokenKind::LParen ||
+           (t.kind == TokenKind::Ident && t.text != "of");
+}
+
+// case <expr> of  <pat> -> <expr>  (one alternative per line, column-aligned)
+NodeId parse_case(Parser& p) {
+    Token kw = cur(p);
+    advance(p); // case
+    Node n;
+    n.kind = NodeKind::Case;
+    n.tok = kw;
+    n.kids.push_back(parse_expr(p, 0)); // scrutinee
+    skip_newlines(p);
+    if (cur(p).kind == TokenKind::Ident && cur(p).text == "of") advance(p);
+    else error(p, "expected 'of' in case");
+
+    skip_newlines(p);
+    if (starts_pattern(cur(p))) {
+        int col = cur(p).col;
+        for (;;) {
+            // Decide whether another alternative follows by looking past the
+            // newline WITHOUT consuming it — otherwise a dedented token after the
+            // case (e.g. the next top-level binding) loses its newline barrier and
+            // gets swallowed by the enclosing application.
+            const Token& nx = peek_nonnl(p);
+            if (!starts_pattern(nx) || nx.col != col) break;
+            skip_newlines(p);
+            Node alt;
+            alt.kind = NodeKind::Alt;
+            alt.tok = cur(p);
+            alt.kids.push_back(parse_pattern(p));
+            if (cur(p).kind == TokenKind::Arrow) advance(p);
+            else error(p, "expected '->' in case alternative");
+            int saved = p.margin;
+            p.margin = col;             // alt body may span lines, indented past the pattern
+            skip_newlines(p);
+            alt.kids.push_back(parse_expr(p, 0));
+            p.margin = saved;
+            n.kids.push_back(ast_add(p.ast, alt));
+        }
+    }
+    return ast_add(p.ast, n);
+}
+
 NodeId parse_primary(Parser& p) {
     Token t = cur(p);
     switch (t.kind) {
@@ -248,8 +348,9 @@ NodeId parse_primary(Parser& p) {
         case TokenKind::Less:      return parse_chord(p);
         case TokenKind::Backslash: return parse_lambda(p);
         case TokenKind::Ident:
-            if (t.text == "let") return parse_let(p);
-            if (t.text == "if")  return parse_if(p);
+            if (t.text == "let")  return parse_let(p);
+            if (t.text == "if")   return parse_if(p);
+            if (t.text == "case") return parse_case(p);
             advance(p);
             return mk(p, NodeKind::Var, t);
         default:
@@ -424,6 +525,12 @@ std::vector<NodeId> parse_block(Parser& p) {
         if (t.kind != TokenKind::Ident) break;
         if (is_keyword(t.text)) break;
         if (t.col != col) break;
+        // a local type signature (`go :: ...`) — parsed and discarded for now
+        if (peek_at(p, 1).kind == TokenKind::ColonColon) {
+            advance(p); // name
+            parse_type_sig(p, t);
+            continue;
+        }
         bs.push_back(parse_binding(p, false));
     }
     return bs;

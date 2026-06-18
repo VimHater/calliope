@@ -41,6 +41,16 @@ void run_eval_tests() {
     CHECK(run_main("if 1 < 2 then 10 else 20").i == 10);
     CHECK(run_main("if 2 < 1 then 10 else 20").i == 20);
 
+    // the full comparison set (< > <= >= == /=)
+    CHECK(run_main("5 > 3").i == 1);
+    CHECK(run_main("3 > 5").i == 0);
+    CHECK(run_main("3 <= 3").i == 1);
+    CHECK(run_main("4 <= 3").i == 0);
+    CHECK(run_main("4 >= 9").i == 0);
+    CHECK(run_main("9 >= 9").i == 1);
+    CHECK(run_main("5 /= 3").i == 1);
+    CHECK(run_main("3 /= 3").i == 0);
+
     // application, currying, lambda
     CHECK(run("id x = x\nmain = id 42", "main").i == 42);
     CHECK(run("k x y = x\nmain = k 7 9", "main").i == 7);
@@ -120,4 +130,19 @@ void run_eval_tests() {
                  "((G3:1/4 :+: A3:1/4) :+: B3:1/4)");
     // explicit :+: / :=: combinators build the same IR (Pitch operands lift to Notes)
     CHECK_EQ_STR(eval::show_value(run_main("c' :+: d'")), "(C4:1/4 :+: D4:1/4)");
+
+    // ---- pipe, cons, case ------------------------------------------------
+    // pipe: x |> f = f x (left-associative, so it chains)
+    CHECK(run_main("5 |> (\\x -> x + 1)").i == 6);
+    CHECK(run_main("5 |> (\\x -> x + 1) |> (\\x -> x * 2)").i == 12);
+    // cons operator builds a list (right-associative)
+    CHECK_EQ_STR(eval::show_value(run_main("1 : 2 : [3]")), "[ 1 2 3 ]");
+    // case: recursion over list shape
+    CHECK(run("sumAll xs = case xs of\n"
+              "  []    -> 0\n"
+              "  h : t -> h + sumAll t\n"
+              "main = sumAll [10, 20, 30]", "main").i == 60);
+    // case: literal + wildcard patterns, first match wins
+    CHECK(run("classify n = case n of\n  0 -> 100\n  _ -> 200\nmain = classify 0", "main").i == 100);
+    CHECK(run("classify n = case n of\n  0 -> 100\n  _ -> 200\nmain = classify 7", "main").i == 200);
 }

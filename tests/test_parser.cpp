@@ -65,6 +65,12 @@ void run_parser_tests() {
         sx("main :: Music"),
         "(Program (TypeSig 'main' (TypeAtom 'Music')))");
 
+    // a where block may carry a local type signature, which is parsed away so
+    // only the binding remains in the desugared let
+    CHECK_EQ_STR(
+        sx("foo = go\n  where\n    go :: Int\n    go = 1"),
+        "(Program (Binding 'foo' (Let 'foo' (Binding 'go' (IntLit '1')) (Var 'go'))))");
+
     // function with a parameter
     CHECK_EQ_STR(
         sx("dev m = invert m"),
@@ -120,4 +126,23 @@ void run_parser_tests() {
     CHECK_EQ_STR(
         sx("foo = x\nbar = y"),
         "(Program (Binding 'foo' (Var 'x')) (Binding 'bar' (Var 'y')))");
+
+    // ---- pipe, cons, case ------------------------------------------------
+    CHECK_EQ_STR(
+        sx("main = x |> fn"),
+        "(Program (Binding 'main' (BinOp '|>' (Var 'x') (Var 'fn'))))");
+
+    CHECK_EQ_STR(
+        sx("main = x : xs"),
+        "(Program (Binding 'main' (BinOp ':' (Var 'x') (Var 'xs'))))");
+
+    // case with an empty-list pattern and a cons pattern; alt body after it is
+    // not swallowed (the case stops at the dedented next binding)
+    CHECK_EQ_STR(
+        sx("classify xs = case xs of\n  [] -> 0\n  h : t -> h\nmain = classify []"),
+        "(Program (Binding 'classify' (Param 'xs') "
+        "(Case 'case' (Var 'xs') "
+        "(Alt '[' (PatCon '[') (IntLit '0')) "
+        "(Alt 'h' (PatCon ':' (PatVar 'h') (PatVar 't')) (Var 'h')))) "
+        "(Binding 'main' (App 'classify' (Var 'classify') (ListLit '['))))");
 }

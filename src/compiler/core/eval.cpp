@@ -39,21 +39,38 @@ void env_define(const std::shared_ptr<Env>& e, std::string name, Value v) {
 // ---- builtins -----------------------------------------------------------
 enum BuiltinId {
     B_ADD, B_SUB, B_MUL, B_DIV,
-    B_EQ, B_LT, B_NOT,
+    B_EQ, B_NE, B_LT, B_GT, B_LE, B_GE, B_NOT,
     B_TRANSPOSE_UP, B_TRANSPOSE_DOWN,
     B_SEMITONES,
     B_NULL, B_HEAD, B_TAIL, B_CONS,
+    // pitch projections (axioms the stdlib builds pitch transforms on)
+    B_MKPITCH, B_DIASTEP, B_CHROMOF,
+    // Music IR axioms: constructors, predicates, accessors
+    B_NOTE, B_NOTEWITH, B_NOTEDUR, B_NOTEPITCH,
+    B_SEQM, B_PARM,
+    B_ISNOTE, B_ISREST, B_ISSEQ, B_ISPAR,
+    B_MLEFT, B_MRIGHT,
 };
 
 struct BuiltinInfo { const char* name; int id; int arity; };
 
 const BuiltinInfo kBuiltins[] = {
     {"+", B_ADD, 2}, {"-", B_SUB, 2}, {"*", B_MUL, 2}, {"/", B_DIV, 2},
-    {"==", B_EQ, 2}, {"<", B_LT, 2}, {"not", B_NOT, 1},
+    {"==", B_EQ, 2}, {"/=", B_NE, 2},
+    {"<", B_LT, 2}, {">", B_GT, 2}, {"<=", B_LE, 2}, {">=", B_GE, 2},
+    {"not", B_NOT, 1},
     {"^+", B_TRANSPOSE_UP, 2}, {"^-", B_TRANSPOSE_DOWN, 2},
     {"semitones", B_SEMITONES, 1},
     // list axioms (the stdlib builds map/filter/… on top of these)
-    {"null", B_NULL, 1}, {"head", B_HEAD, 1}, {"tail", B_TAIL, 1}, {"cons", B_CONS, 2},
+    {"null", B_NULL, 1}, {"head", B_HEAD, 1}, {"tail", B_TAIL, 1},
+    {"cons", B_CONS, 2}, {":", B_CONS, 2},
+    {"makePitch", B_MKPITCH, 2}, {"diatonicStep", B_DIASTEP, 1}, {"chromaticOf", B_CHROMOF, 1},
+    {"note", B_NOTE, 1}, {"noteWith", B_NOTEWITH, 2},
+    {"noteDur", B_NOTEDUR, 1}, {"notePitch", B_NOTEPITCH, 1},
+    {"sequence", B_SEQM, 2}, {"parallel", B_PARM, 2},
+    {"isNote", B_ISNOTE, 1}, {"isRest", B_ISREST, 1},
+    {"isSeq", B_ISSEQ, 1}, {"isPar", B_ISPAR, 1},
+    {"leftChild", B_MLEFT, 1}, {"rightChild", B_MRIGHT, 1},
 };
 
 // Interval name -> (diatonic steps, semitones). Enough common ones to be useful.
@@ -76,6 +93,33 @@ Pitch transpose_pitch(Pitch p, int dstep, int dsemi) {
     return mk_pitch(ns, acc);
 }
 
+Value music_value(Interp& I, music::MusicId root) {
+    Value v;
+    v.kind = ValueKind::Music;
+    v.mus = I.music;
+    v.mroot = root;
+    return v;
+}
+
+Value v_rat(Rational r) {
+    Value v;
+    v.kind = ValueKind::Rat;
+    v.rat = r;
+    return v;
+}
+
+// Inspect a Music value's root node; returns false if `v` is not Music.
+bool music_node(const Value& v, music::MusicNode& out) {
+    if (v.kind != ValueKind::Music || !v.mus) return false;
+    if (v.mroot < 0 || v.mroot >= static_cast<music::MusicId>(v.mus->nodes.size())) return false;
+    out = v.mus->nodes[v.mroot];
+    return true;
+}
+
+// defined in the notation section below, used by the Music builtins
+music::MusicId to_music(Interp& I, const Value& v);
+Value v_pitch_dur(Pitch p, Rational dur);
+
 Value call_builtin(Interp& I, int id, std::vector<Value>& a) {
     switch (id) {
         case B_ADD: return v_int(a[0].i + a[1].i);
@@ -84,11 +128,18 @@ Value call_builtin(Interp& I, int id, std::vector<Value>& a) {
         case B_DIV:
             if (a[1].i == 0) { I.errors.push_back("division by zero"); return v_unit(); }
             return v_int(a[0].i / a[1].i);
-        case B_EQ:
+        case B_EQ: case B_NE: {
+            bool eq;
             if (a[0].kind == ValueKind::Pitch && a[1].kind == ValueKind::Pitch)
-                return v_bool(pitch_eq(a[0].pitch, a[1].pitch));
-            return v_bool(a[0].i == a[1].i);
-        case B_LT: return v_bool(a[0].i < a[1].i);
+                eq = pitch_eq(a[0].pitch, a[1].pitch);
+            else
+                eq = a[0].i == a[1].i;
+            return v_bool(id == B_EQ ? eq : !eq);
+        }
+        case B_LT: return v_bool(a[0].i <  a[1].i);
+        case B_GT: return v_bool(a[0].i >  a[1].i);
+        case B_LE: return v_bool(a[0].i <= a[1].i);
+        case B_GE: return v_bool(a[0].i >= a[1].i);
         case B_NOT: return v_bool(a[0].i == 0);
         case B_TRANSPOSE_UP:
         case B_TRANSPOSE_DOWN: {
@@ -153,6 +204,62 @@ Value call_builtin(Interp& I, int id, std::vector<Value>& a) {
             v.items.insert(v.items.end(), a[1].items.begin(), a[1].items.end());
             return v;
         }
+
+        // ---- pitch projections ------------------------------------------
+        case B_MKPITCH:   return v_pitch(mk_pitch(static_cast<int>(a[0].i), static_cast<int>(a[1].i)));
+        case B_DIASTEP:   return v_int(diatonic_step(a[0].pitch));
+        case B_CHROMOF:   return v_int(chromatic_of(static_cast<int>(a[0].i)));
+
+        // ---- Music constructors -----------------------------------------
+        case B_NOTE: {
+            Rational d = (a[0].rat.num > 0) ? a[0].rat : rational(1, 4);
+            return music_value(I, music::note(*I.music, a[0].pitch, d));
+        }
+        case B_NOTEWITH:
+            return music_value(I, music::note(*I.music, a[0].pitch, a[1].rat));
+        case B_SEQM:
+            return music_value(I, music::seq(*I.music, to_music(I, a[0]), to_music(I, a[1])));
+        case B_PARM:
+            return music_value(I, music::par(*I.music, to_music(I, a[0]), to_music(I, a[1])));
+
+        // ---- Music predicates -------------------------------------------
+        case B_ISNOTE: case B_ISREST: case B_ISSEQ: case B_ISPAR: {
+            music::MusicNode n;
+            if (!music_node(a[0], n)) { I.errors.push_back("expected Music"); return v_unit(); }
+            music::MusicKind want = id == B_ISNOTE ? music::MusicKind::Note
+                                  : id == B_ISREST ? music::MusicKind::Rest
+                                  : id == B_ISSEQ  ? music::MusicKind::Seq
+                                                   : music::MusicKind::Par;
+            return v_bool(n.kind == want);
+        }
+
+        // ---- Music accessors --------------------------------------------
+        case B_NOTEPITCH: {
+            music::MusicNode n;
+            if (!music_node(a[0], n) || n.kind != music::MusicKind::Note) {
+                I.errors.push_back("notePitch expects a note");
+                return v_unit();
+            }
+            return v_pitch_dur(n.pitch, n.dur);
+        }
+        case B_NOTEDUR: {
+            music::MusicNode n;
+            if (!music_node(a[0], n) ||
+                (n.kind != music::MusicKind::Note && n.kind != music::MusicKind::Rest)) {
+                I.errors.push_back("noteDur expects a note or rest");
+                return v_unit();
+            }
+            return v_rat(n.dur);
+        }
+        case B_MLEFT: case B_MRIGHT: {
+            music::MusicNode n;
+            if (!music_node(a[0], n) ||
+                (n.kind != music::MusicKind::Seq && n.kind != music::MusicKind::Par)) {
+                I.errors.push_back("leftChild/rightChild expect a Seq or Par");
+                return v_unit();
+            }
+            return music_value(I, id == B_MLEFT ? n.left : n.right);
+        }
     }
     I.errors.push_back("unknown builtin");
     return v_unit();
@@ -197,13 +304,6 @@ Value v_pitch_dur(Pitch p, Rational dur) {
     return v;
 }
 
-Value v_music(Interp& I, music::MusicId root) {
-    Value v;
-    v.kind = ValueKind::Music;
-    v.mus = I.music;
-    v.mroot = root;
-    return v;
-}
 
 // Lift a value into the Music IR: a Pitch becomes a Note (carrying its literal
 // duration, default quarter), Music passes through, a Rest becomes a rest.
@@ -300,6 +400,39 @@ bool lookup_operator(Interp& I, std::string_view op, Value& out) {
     return env_lookup(I.globals, op, out);
 }
 
+// Match `v` against a pattern, binding any pattern variables into `env`.
+// Returns false (leaving partial bindings, discarded by the caller) on mismatch.
+bool match_pattern(Interp& I, NodeId patId, const Value& v,
+                   const std::shared_ptr<Env>& env) {
+    const Node& pat = I.ast->nodes[patId];
+    switch (pat.kind) {
+        case NodeKind::PatWild:
+            return true;
+        case NodeKind::PatVar:
+            env_define(env, std::string(pat.tok.text), v);
+            return true;
+        case NodeKind::PatInt:
+            return v.kind == ValueKind::Int && v.i == parse_int(pat.tok.text);
+        case NodeKind::PatCon: {
+            std::string_view name = pat.tok.text;
+            if (name == "True")  return v.kind == ValueKind::Bool && v.i != 0;
+            if (name == "False") return v.kind == ValueKind::Bool && v.i == 0;
+            if (name == "[")     return v.kind == ValueKind::List && v.items.empty();
+            if (name == ":") {
+                if (v.kind != ValueKind::List || v.items.empty()) return false;
+                Value tail;
+                tail.kind = ValueKind::List;
+                tail.items.assign(v.items.begin() + 1, v.items.end());
+                return match_pattern(I, pat.kids[0], v.items.front(), env) &&
+                       match_pattern(I, pat.kids[1], tail, env);
+            }
+            return false; // unknown constructor
+        }
+        default:
+            return false;
+    }
+}
+
 Value eval(Interp& I, NodeId id, const std::shared_ptr<Env>& env) {
     const Node& n = I.ast->nodes[id];
     switch (n.kind) {
@@ -314,7 +447,7 @@ Value eval(Interp& I, NodeId id, const std::shared_ptr<Env>& env) {
             decode_pitch(n.tok.text, p, d);
             return v_pitch_dur(p, d);
         }
-        case NodeKind::RestLit:  return v_music(I, music::rest(*I.music, rational(1, 4)));
+        case NodeKind::RestLit:  return music_value(I, music::rest(*I.music, rational(1, 4)));
         case NodeKind::Con:
             if (n.tok.text == "True")  return v_bool(true);
             if (n.tok.text == "False") return v_bool(false);
@@ -337,7 +470,7 @@ Value eval(Interp& I, NodeId id, const std::shared_ptr<Env>& env) {
                 music::MusicId m = to_music(I, eval(I, k, env));
                 acc = (acc == music::NoMusic) ? m : music::seq(*I.music, acc, m);
             }
-            return v_music(I, acc);
+            return music_value(I, acc);
         }
         case NodeKind::Chord: {
             music::MusicId acc = music::NoMusic;
@@ -345,7 +478,7 @@ Value eval(Interp& I, NodeId id, const std::shared_ptr<Env>& env) {
                 music::MusicId m = to_music(I, eval(I, k, env));
                 acc = (acc == music::NoMusic) ? m : music::par(*I.music, acc, m);
             }
-            return v_music(I, acc);
+            return music_value(I, acc);
         }
         case NodeKind::ListLit: {
             Value v;
@@ -366,8 +499,9 @@ Value eval(Interp& I, NodeId id, const std::shared_ptr<Env>& env) {
             }
             Value l = eval(I, n.kids[0], env);
             Value r = eval(I, n.kids[1], env);
-            if (op == ":+:") return v_music(I, music::seq(*I.music, to_music(I, l), to_music(I, r)));
-            if (op == ":=:") return v_music(I, music::par(*I.music, to_music(I, l), to_music(I, r)));
+            if (op == "|>") return apply(I, std::move(r), std::move(l)); // x |> f = f x
+            if (op == ":+:") return music_value(I, music::seq(*I.music, to_music(I, l), to_music(I, r)));
+            if (op == ":=:") return music_value(I, music::par(*I.music, to_music(I, l), to_music(I, r)));
             Value f;
             if (!lookup_operator(I, op, f)) {
                 I.errors.push_back("unknown operator: " + std::string(op));
@@ -379,6 +513,17 @@ Value eval(Interp& I, NodeId id, const std::shared_ptr<Env>& env) {
             Value c = eval(I, n.kids[0], env);
             bool t = (c.i != 0); // Bool stored in i; nonzero Int also truthy
             return eval(I, n.kids[t ? 1 : 2], env);
+        }
+        case NodeKind::Case: {
+            Value scrut = eval(I, n.kids[0], env);
+            for (std::size_t k = 1; k < n.kids.size(); k++) {
+                const Node& alt = I.ast->nodes[n.kids[k]];
+                auto child = make_env(env);
+                if (match_pattern(I, alt.kids[0], scrut, child))
+                    return eval(I, alt.kids[1], child);
+            }
+            I.errors.push_back("non-exhaustive patterns in case");
+            return v_unit();
         }
         case NodeKind::Lambda: {
             Value v;
@@ -416,6 +561,11 @@ Value eval(Interp& I, NodeId id, const std::shared_ptr<Env>& env) {
         }
         case NodeKind::Binding: // evaluated by eval_program / Let, not standalone
         case NodeKind::Param:
+        case NodeKind::Alt:     // handled within Case
+        case NodeKind::PatVar:
+        case NodeKind::PatWild:
+        case NodeKind::PatInt:
+        case NodeKind::PatCon:
         case NodeKind::TypeSig:
         case NodeKind::TypeAtom:
         case NodeKind::Directive:

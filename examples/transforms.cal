@@ -1,0 +1,13 @@
+-- transforms.cal — a tour of the standard-library music transforms.
+--
+-- Define a short subject, then put it through the classic phrase transforms.
+-- Each binding below is a Music value; `main` strings three of them together.
+
+subject = c' d' e' g'
+
+higher    = transpose P5 subject   -- shift the whole phrase up a perfect fifth
+mirrored  = invert subject         -- melodic inversion about the first pitch
+backwards = retrograde subject     -- the same notes, reversed in time
+
+-- subject, then its inversion, then its retrograde — played in sequence
+main = line [subject, mirrored, backwards]

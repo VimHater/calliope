@@ -1,3 +1,4 @@
+
 # Calliope — Language Specification (Draft)
 
 > A functional DSL for composing music programmatically.
@@ -19,7 +20,7 @@ note C4 quarter, note E4 quarter, note G4 half, ...
 
 A composer thinks:
 
-```haskell
+```
 -- "the development takes the subject, inverts it,
 --  and sequences it against itself at the fifth"
 development :: Phrase -> Phrase
@@ -88,7 +89,7 @@ Lowercase pitches vs. uppercase constructors is deliberate: `f` is the note F,
 
 The motto example needs no delimiter and no sigil:
 
-```haskell
+```
 subject :: Phrase
 subject = c'4 d'8 e'8 g'4 a'2
 
@@ -110,7 +111,7 @@ cannot collide with the pitch class.
 
 ## 3. Core types
 
-```haskell
+```
 data Pitch                       -- a tuned pitch, e.g. C#5
 data PitchClass = C | D | E | F | G | A | B
 data Accidental = Natural | Sharp | Flat | DoubleSharp | DoubleFlat
@@ -146,7 +147,7 @@ in §6 desugar into it.
 Pitches and intervals form a small algebra so that transposition reads like
 arithmetic.
 
-```haskell
+```
 -- Intervals as named constructors (quality + number)
 P1 P4 P5 P8        -- perfect
 M2 M3 M6 M7        -- major
@@ -287,7 +288,7 @@ preprocess ─► parse ─► octave-resolution pass ─► typecheck ─► de
 The parser does **not** emit a final `Pitch`. It emits a raw token that keeps the
 parts separate, so the pass can interpret it under whichever mode the region is in:
 
-```haskell
+```
 data RawPitch = RawPitch
   { letter      :: PitchClass
   , accidental  :: Accidental
@@ -319,7 +320,7 @@ Musical context is expressed with the ordinary term-level combinators of §8 —
 node. (We deliberately drop LilyPond's `\key`/`\tempo` backslash forms: they read
 like parser fodder, not like something a human wants to write.)
 
-```haskell
+```
 piece = inKey (major D) (tempo allegro melody)   -- not \key, not \tempo
 ```
 
@@ -361,7 +362,7 @@ module system later) are open — see O12.
 Operators are primary; each has an English-word alias (use whichever reads
 better at the call site).
 
-```haskell
+```
 -- Sequential: b begins when a ends
 (:+:)   :: Music -> Music -> Music
 andThen :: Music -> Music -> Music     -- = (:+:)
@@ -381,7 +382,7 @@ So `motif1 :+: motif2` and ``motif1 `andThen` motif2`` are the same;
 
 Example — a I–IV–V–I progression as block chords over a melody:
 
-```haskell
+```
 progression :: Music
 progression = chords `par` melody
   where chords = line [cMaj, fMaj, gMaj, cMaj]
@@ -392,7 +393,7 @@ progression = chords `par` melody
 
 ## 7. Transformations — the verbs of composition
 
-```haskell
+```
 transpose   :: Interval -> Music -> Music   -- (or: m + interval)
 invert      :: Music -> Music               -- melodic inversion about 1st pitch
 invertAbout :: Pitch -> Music -> Music       -- inversion about a chosen axis
@@ -407,7 +408,7 @@ sequenceBy  :: [Interval] -> Music -> Music
 
 These let development sections read as English:
 
-```haskell
+```
 -- a stretto: the subject entering against itself, a fifth up, delayed a bar
 stretto :: Phrase -> Phrase
 stretto subj = subj `par` (rest 1 :+: (subj ^+ P5))
@@ -423,7 +424,7 @@ answer = (^+ P5) . invert
 
 These wrap a subtree in a `Control` without touching its notes.
 
-```haskell
+```
 tempo      :: BPM -> Music -> Music
 dynamic    :: Dynamic -> Music -> Music
 instrument :: Instr -> Music -> Music
@@ -434,7 +435,7 @@ andante, allegro :: BPM            -- named tempi
 violin, cello, flute :: Instr      -- General MIDI instruments
 ```
 
-```haskell
+```
 opening :: Music
 opening =
   tempo allegro $
@@ -466,18 +467,43 @@ Calliope's non-musical syntax is a pragmatic subset of Haskell:
 
 Proposed minimum operator fixities:
 
-```haskell
+```
 infixl 6 ^+ ^-    -- transposition up / down (binds tighter than seq/par)
 infixr 5 :+:      -- sequence
+infixr 5 :        -- list cons
 infixr 4 :=:      -- parallel  (binds looser than sequence)
+infixl 1 |>       -- pipe: x |> f = f x
 -- numeric +, -, *, / keep their ordinary arithmetic fixities, unrelated to music
 ```
+
+### 9.1 Pattern matching & pipe (implemented)
+
+**`case … of`** is implemented with an offside-aligned alternative list (one
+`pattern -> expr` per line). Patterns: wildcard `_`, variable, int literal,
+`True`/`False`, empty list `[]`, and cons `h : t` (nestable, parenthesisable).
+First match wins; a non-exhaustive match is a runtime error. The cons operator
+`:` also builds lists in expressions, so `h : t` reads identically constructing
+and destructuring. This is what lets the list prelude be written idiomatically:
+
+```
+map fn xs = case xs of
+  []    -> []
+  h : t -> fn h : map fn t
+```
+
+**Pipe `|>`** (`x |> f = f x`, `infixl 1`) chains transforms left-to-right —
+`phrase |> invert |> transpose P5` reads as a pipeline.
+
+> Still open: multi-equation function clauses (`f [] = …` / `f (x:xs) = …`) as
+> sugar over `case`; `data` declarations + user constructor patterns; Music
+> patterns (`a :+: b`) once the IR constructors are surfaced as patterns; list
+> literal patterns `[a, b]`.
 
 ---
 
 ## 10. A worked example
 
-```haskell
+```
 -- Frère Jacques as a four-voice round.
 -- Phrase names are ordinary identifiers; they just can't be pitch-shaped, so we
 -- name the four lines by their lyric rather than a, b, c, d (those are pitches).
@@ -725,7 +751,7 @@ Transposition is **not** an overload of numeric `+`. Pitches are points and
 intervals are vectors; shifting a point by a vector is its own operator, `^+`
 (up) / `^-` (down), via a plain **single-parameter** class:
 
-```haskell
+```
 class Transposable a where
   (^+) :: a -> Interval -> a       -- result type = the thing being shifted
   (^-) :: a -> Interval -> a
@@ -760,7 +786,7 @@ to audio / MIDI / MusicXML. There is **no IO in the language** — purity holds 
 to end, and effects exist only at the runtime boundary, applied to the final
 value (never callable mid-computation).
 
-```haskell
+```
 main :: Music
 main = tempo allegro (instrument piano theme)   -- the runtime plays this
 ```

@@ -65,6 +65,13 @@ void run_typecheck_tests() {
     // well-typed programs report no error
     CHECK(!has_type_error("inc x = x + 1\nmain = inc 41"));
 
+    // pipe, cons, case
+    CHECK_EQ_STR(type_of("main = 1 : [2, 3]", "main"), "[Int]");
+    CHECK_EQ_STR(type_of("main = 5 |> (\\x -> x + 1)", "main"), "Int");
+    CHECK_EQ_STR(type_of("sumList xs = case xs of\n  []    -> 0\n  h : t -> h + sumList t",
+                         "sumList"), "[Int] -> Int");
+    CHECK(has_type_error("main = case 1 of\n  [] -> 0\n  _ -> 1"));  // Int vs [a]
+
     // ---- type classes ----------------------------------------------------
     // (type variables can't be pitch letters a-g/r/s, so we use `t`.)
     const char* desc =

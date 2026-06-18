@@ -1,0 +1,127 @@
+# Built-in functions (the C++ core)
+
+The core is deliberately thin: it exposes only **axioms**. Everything else —
+including all music theory — is written in Calliope in the
+[standard library](./stdlib.md). The builtins below are always in scope.
+
+## Operators
+
+| Operator | Type | Notes |
+|----------|------|-------|
+| `+` `-` `*` `/` | `Int -> Int -> Int` | `/` is integer division; divide by zero is an error |
+| `==` `/=` | `a -> a -> Bool` | structural equality (works on `Int`, `Bool`, `Pitch`) |
+| `<` `>` `<=` `>=` | `Int -> Int -> Bool` | ordering on integers |
+| `and` `or` | `Bool -> Bool -> Bool` | keyword operators, **short-circuit** |
+| `^+` `^-` | `Transposable t => t -> Interval -> t` | transpose; class method (see below) |
+| `:` | `a -> [a] -> [a]` | list cons (`x : xs`) |
+| `\|>` | `a -> (a -> b) -> b` | pipe: `x \|> f = f x` |
+| `:+:` | `Music -> Music -> Music` | sequential composition |
+| `:=:` | `Music -> Music -> Music` | parallel composition |
+
+`not :: Bool -> Bool` is a prefix function. `:+:`/`:=:` lift `Pitch` operands to
+notes automatically.
+
+## Transposition — the `Transposable` class
+
+`^+` and `^-` are methods of a builtin single-parameter class:
+
+```
+class Transposable t where
+  (^+) :: t -> Interval -> t
+  (^-) :: t -> Interval -> t
+```
+
+with builtin instances for **`Pitch`** (transpose one pitch, keeping spelling) and
+**`Music`** (transpose every note in a phrase). You can add more instances. The
+result type equals the left operand, so no annotation is needed:
+
+```
+c' ^+ P5            -- G4            :: Pitch
+(c' e' g') ^+ P5    -- whole phrase  :: Music
+```
+
+### Intervals
+
+Intervals are written as named constructors (quality + number):
+
+```
+P1  m2 M2  m3 M3  P4  A4 d5  P5  m6 M6  m7 M7  P8
+```
+
+(perfect, minor, major, augmented/diminished). They span up to one octave today.
+
+## Pitch projections
+
+The bridge between spelled pitches and numbers; the prelude builds pitch
+arithmetic on these.
+
+| Function | Type | Meaning |
+|----------|------|---------|
+| `semitones` | `Pitch -> Int` | chromatic value (C0 = 0, so C4 = 48) |
+| `diatonicStep` | `Pitch -> Int` | staff position (octave·7 + letter) |
+| `chromaticOf` | `Int -> Int` | semitones of a diatonic step (the natural at that position) |
+| `makePitch` | `Int -> Int -> Pitch` | build a pitch from a diatonic step and an accidental |
+
+```
+-- transpose by raw semitones, respelled at a chosen staff position
+reflectPitch p axis =
+  makePitch (2 * diatonicStep axis - diatonicStep p)
+          (2 * semitones axis - semitones p
+             - chromaticOf (2 * diatonicStep axis - diatonicStep p))
+```
+
+## List axioms
+
+The four primitives the list library is built on. They are polymorphic.
+
+| Function | Type | Meaning |
+|----------|------|---------|
+| `null` | `[a] -> Bool` | true on the empty list |
+| `head` | `[a] -> a` | first element (error if empty) |
+| `tail` | `[a] -> [a]` | everything after the first (error if empty) |
+| `cons` | `a -> [a] -> [a]` | prepend one element |
+
+List literals (`[1, 2, 3]`, `[]`) are built-in syntax.
+
+## Music tree axioms
+
+The `Music` value is a tree of `Note | Rest | Seq | Par`. These constructors,
+predicates, and accessors let the prelude define structural transforms (`invert`,
+`retrograde`, `mapPitches`, …) in Calliope.
+
+### Constructors
+
+| Function | Type | Meaning |
+|----------|------|---------|
+| `note` | `Pitch -> Music` | a note (uses the pitch's duration, default quarter) |
+| `noteWith` | `Pitch -> Rational -> Music` | a note of an explicit duration |
+| `sequence` | `Music -> Music -> Music` | sequence two phrases (same as `:+:`) |
+| `parallel` | `Music -> Music -> Music` | layer two phrases (same as `:=:`) |
+
+### Predicates
+
+| Function | Type |
+|----------|------|
+| `isNote` `isRest` `isSeq` `isPar` | `Music -> Bool` |
+
+### Accessors
+
+| Function | Type | Meaning |
+|----------|------|---------|
+| `notePitch` | `Music -> Pitch` | the pitch of a note |
+| `noteDur` | `Music -> Rational` | the duration of a note or rest |
+| `leftChild` | `Music -> Music` | left child of a `Seq`/`Par` |
+| `rightChild` | `Music -> Music` | right child of a `Seq`/`Par` |
+
+```
+-- walk and rebuild a phrase, rewriting each pitch
+mapPitches func phrase =
+  if isNote phrase then noteWith (func (notePitch phrase)) (noteDur phrase)
+  else if isSeq phrase then sequence (mapPitches func (leftChild phrase)) (mapPitches func (rightChild phrase))
+  else if isPar phrase then parallel (mapPitches func (leftChild phrase)) (mapPitches func (rightChild phrase))
+  else phrase
+```
+
+`semitones`, the list axioms, and the comparison/arithmetic operators are the only
+non-music primitives; the rest of the language's power comes from composing these
+in Calliope.

@@ -170,6 +170,36 @@ bool is_interval_name(std::string_view s) {
 
 TypeId infer(Checker& ck, Env& env, NodeId id);
 
+// Infer a pattern's type, pushing any pattern-variable bindings onto `env`
+// (the caller resizes `env` back after the alternative's body).
+TypeId infer_pattern(Checker& ck, Env& env, NodeId patId) {
+    Ctx& c = ck.ctx;
+    const Node& pat = ck.ast->nodes[patId];
+    switch (pat.kind) {
+        case NodeKind::PatWild: return new_var(c);
+        case NodeKind::PatVar: {
+            TypeId pv = new_var(c);
+            Scheme s; s.type = pv;
+            env.push_back({std::string(pat.tok.text), s});
+            return pv;
+        }
+        case NodeKind::PatInt: return t_con0(c, "Int");
+        case NodeKind::PatCon: {
+            std::string_view name = pat.tok.text;
+            if (name == "True" || name == "False") return t_con0(c, "Bool");
+            if (name == "[") return t_list(c, new_var(c));   // empty list
+            if (name == ":") {
+                TypeId h = infer_pattern(ck, env, pat.kids[0]);
+                TypeId t = infer_pattern(ck, env, pat.kids[1]);
+                unify(ck, t, t_list(c, h));
+                return t_list(c, h);
+            }
+            return new_var(c); // unknown constructor
+        }
+        default: return new_var(c);
+    }
+}
+
 // operator type for a BinOp token; returns NoType if unknown
 TypeId operator_type(Checker& ck, Env& env, std::string_view op) {
     Ctx& c = ck.ctx;
@@ -233,6 +263,20 @@ TypeId infer(Checker& ck, Env& env, NodeId id) {
             TypeId te = infer(ck, env, n.kids[2]);
             unify(ck, tt, te);
             return resolve(c, tt);
+        }
+        case NodeKind::Case: {
+            TypeId scrutT = infer(ck, env, n.kids[0]);
+            TypeId resultT = new_var(c);
+            for (std::size_t k = 1; k < n.kids.size(); k++) {
+                const Node& alt = ck.ast->nodes[n.kids[k]];
+                std::size_t base = env.size();
+                TypeId patT = infer_pattern(ck, env, alt.kids[0]);
+                unify(ck, scrutT, patT);
+                TypeId bodyT = infer(ck, env, alt.kids[1]);
+                unify(ck, resultT, bodyT);
+                env.resize(base);
+            }
+            return resolve(c, resultT);
         }
         case NodeKind::ListLit: {
             TypeId el = new_var(c);
@@ -516,6 +560,39 @@ void seed_builtins(Checker& ck, Env& env) {
         TypeId a = new_var(c); int av = c.pool[a].var;
         add_poly("cons", av, t_arrow(c, a, t_arrow(c, t_list(c, a), t_list(c, a))));
     }
+    {   // ':' is cons as an operator
+        TypeId a = new_var(c); int av = c.pool[a].var;
+        add_poly(":", av, t_arrow(c, a, t_arrow(c, t_list(c, a), t_list(c, a))));
+    }
+    {   // '|>' pipe: forall a b. a -> (a -> b) -> b
+        TypeId a = new_var(c), b = new_var(c);
+        Scheme s;
+        s.vars.push_back(c.pool[a].var);
+        s.vars.push_back(c.pool[b].var);
+        s.type = t_arrow(c, a, t_arrow(c, t_arrow(c, a, b), b));
+        env.push_back({"|>", s});
+    }
+
+    // pitch projections + Music IR axioms (the music prelude builds on these)
+    auto tMusic = [&]() { return t_con0(c, "Music"); };
+    auto tPit   = [&]() { return t_con0(c, "Pitch"); };
+    auto tInt   = [&]() { return t_con0(c, "Int"); };
+    auto tBool  = [&]() { return t_con0(c, "Bool"); };
+    auto tRat   = [&]() { return t_con0(c, "Rational"); };
+    add_mono("makePitch", t_arrow(c, tInt(), t_arrow(c, tInt(), tPit())));
+    add_mono("diatonicStep", t_arrow(c, tPit(), tInt()));
+    add_mono("chromaticOf", t_arrow(c, tInt(), tInt()));
+    add_mono("note", t_arrow(c, tPit(), tMusic()));
+    add_mono("noteWith", t_arrow(c, tPit(), t_arrow(c, tRat(), tMusic())));
+    add_mono("noteDur", t_arrow(c, tMusic(), tRat()));
+    add_mono("notePitch", t_arrow(c, tMusic(), tPit()));
+    add_mono("sequence", t_arrow(c, tMusic(), t_arrow(c, tMusic(), tMusic())));
+    add_mono("parallel", t_arrow(c, tMusic(), t_arrow(c, tMusic(), tMusic())));
+    for (const char* p : {"isNote", "isRest", "isSeq", "isPar"})
+        add_mono(p, t_arrow(c, tMusic(), tBool()));
+    add_mono("leftChild", t_arrow(c, tMusic(), tMusic()));
+    add_mono("rightChild", t_arrow(c, tMusic(), tMusic()));
+
     (void)Int; (void)Bool; (void)Pitch;
 }
 

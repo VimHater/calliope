@@ -1,44 +1,142 @@
--- Calliope standard library — list commons.
+-- Calliope standard library.
 --
--- Written in Calliope on top of the thin C++ core. The core provides only the
--- list axioms; everything here is ordinary Calliope (recursion + if/else):
+-- Written in Calliope on top of the thin C++ core. The core provides only a few
+-- list axioms; everything here is built from them:
 --
 --   null :: [t] -> Bool        true on the empty list
 --   head :: [t] -> t           first element
 --   tail :: [t] -> [t]         everything after the first
 --   cons :: t -> [t] -> [t]    prepend one element
 --
--- (Type variables can't be spelled like a pitch — a..g, r, s — so we use `t`.)
+-- (Type variables can't be spelled like a pitch — a..g, r, s — so we use t/u/v.)
+-- Every function is declared with a type signature before its definition.
+
+-- ===========================================================================
+-- Lists
+-- ===========================================================================
 
 -- length of a list
-length xs =
-  if null xs
-  then 0
-  else 1 + length (tail xs)
+length :: [t] -> Int
+length xs = case xs of
+  []           -> 0
+  _ : rest     -> 1 + length rest
 
 -- apply a function to every element
-map fn xs =
-  if null xs
-  then []
-  else cons (fn (head xs)) (map fn (tail xs))
+map :: (t -> u) -> [t] -> [u]
+map func xs = case xs of
+  []           -> []
+  first : rest -> func first : map func rest
 
 -- keep the elements that satisfy a predicate
-filter pred xs =
-  if null xs then []
-  else if pred (head xs)
-       then cons (head xs) (filter pred (tail xs))
-       else filter pred (tail xs)
+filter :: (t -> Bool) -> [t] -> [t]
+filter predicate xs = case xs of
+  []           -> []
+  first : rest ->
+    if predicate first
+    then first : filter predicate rest
+    else filter predicate rest
 
--- reverse a list (a tail-recursive accumulator does the work)
+-- reverse a list (a tail-recursive helper accumulates the result)
+reverse :: [t] -> [t]
 reverse xs = go xs []
   where
-    go ys acc =
-      if null ys
-      then acc
-      else go (tail ys) (cons (head ys) acc)
+    go :: [t] -> [t] -> [t]
+    go remaining reversed = case remaining of
+      []           -> reversed
+      first : rest -> go rest (first : reversed)
 
 -- drop the first n elements (or all of them if the list is shorter)
-drop n xs =
-  if n == 0 then xs
-  else if null xs then xs
-  else drop (n - 1) (tail xs)
+drop :: Int -> [t] -> [t]
+drop n xs = case xs of
+  []       -> []
+  _ : rest -> if n == 0 then xs else drop (n - 1) rest
+
+-- ===========================================================================
+-- Higher-order list helpers
+-- ===========================================================================
+
+flip :: (t -> u -> v) -> u -> t -> v
+flip func x y = func y x
+
+foldr :: (t -> u -> u) -> u -> [t] -> u
+foldr func seed xs = case xs of
+  []           -> seed
+  first : rest -> func first (foldr func seed rest)
+
+-- fold without a seed (for non-empty lists); used to combine musical phrases
+foldr1 :: (t -> t -> t) -> [t] -> t
+foldr1 func xs = case xs of
+  only : []    -> only
+  first : rest -> func first (foldr1 func rest)
+  []           -> head xs            -- empty: falls back to the head axiom's error
+
+-- concatenate two lists
+append :: [t] -> [t] -> [t]
+append xs ys = case xs of
+  []           -> ys
+  first : rest -> first : append rest ys
+
+-- ===========================================================================
+-- Music transforms — built on the Music axioms in the C++ core:
+--   note / noteWith / sequence / parallel        constructors
+--   isNote / isRest / isSeq / isPar      predicates
+--   leftChild / rightChild / notePitch / noteDur accessors
+--   makePitch / diatonicStep / chromaticOf / semitones   pitch projections
+-- ===========================================================================
+
+-- lift pitches to notes
+notes :: [Pitch] -> [Music]
+notes pitches = map note pitches
+
+-- play / stack a list of phrases
+line :: [Music] -> Music
+line phrases = foldr1 sequence phrases     -- play in sequence  (a :+: b :+: ...)
+
+chord :: [Music] -> Music
+chord phrases = foldr1 parallel phrases     -- sound together    (a :=: b :=: ...)
+
+-- combine two phrases: in sequence / in parallel (handy as `x `par` y`)
+seqn :: Music -> Music -> Music
+seqn left right = sequence left right
+
+par :: Music -> Music -> Music
+par left right = parallel left right
+
+-- shift a whole phrase by an interval (transpose = flip (^+))
+transpose :: Interval -> Music -> Music
+transpose interval phrase = phrase ^+ interval
+
+-- rewrite every pitch in a phrase, keeping structure + durations
+mapPitches :: (Pitch -> Pitch) -> Music -> Music
+mapPitches func phrase =
+  if isNote phrase then noteWith (func (notePitch phrase)) (noteDur phrase)
+  else if isSeq phrase then sequence (mapPitches func (leftChild phrase)) (mapPitches func (rightChild phrase))
+  else if isPar phrase then parallel (mapPitches func (leftChild phrase)) (mapPitches func (rightChild phrase))
+  else phrase
+
+-- the first sounding pitch (leftmost note) of a phrase — inversion's axis
+firstPitch :: Music -> Pitch
+firstPitch phrase = if isNote phrase then notePitch phrase else firstPitch (leftChild phrase)
+
+-- reflect a pitch about an axis (mirror both the staff position and the
+-- chromatic distance, so the spelling mirrors too)
+reflectPitch :: Pitch -> Pitch -> Pitch
+reflectPitch pitch axis =
+  makePitch (2 * diatonicStep axis - diatonicStep pitch)
+          (2 * semitones axis - semitones pitch
+             - chromaticOf (2 * diatonicStep axis - diatonicStep pitch))
+
+-- melodic inversion about the phrase's first pitch
+invert :: Music -> Music
+invert phrase = mapPitches (\pitch -> reflectPitch pitch (firstPitch phrase)) phrase
+
+-- play a phrase backwards in time (swap the order of every sequence)
+retrograde :: Music -> Music
+retrograde phrase =
+  if isSeq phrase then sequence (retrograde (rightChild phrase)) (retrograde (leftChild phrase))
+  else if isPar phrase then parallel (retrograde (leftChild phrase)) (retrograde (rightChild phrase))
+  else phrase
+
+-- repeat a phrase n times in a row (n >= 1)
+times :: Int -> Music -> Music
+times n phrase = if n == 1 then phrase else sequence phrase (times (n - 1) phrase)

@@ -1,0 +1,12 @@
+-- pipeline.cal — read transforms left-to-right with the pipe operator.
+--
+-- x |> f = f x, so a phrase flows through each transform in turn. Compare with
+-- the nested form `times 2 (transpose P5 (invert subject))` — the pipeline reads
+-- in the order the transforms actually happen.
+
+subject = c' d' e' g'
+
+main = subject
+  |> invert            -- mirror it about the first note
+  |> transpose P5      -- lift the result up a perfect fifth
+  |> times 2           -- then play that twice

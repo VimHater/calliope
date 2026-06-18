@@ -54,10 +54,19 @@ bool type_errors(const std::string& program) {
     return !errs.empty();
 }
 
+// Parse errors in the prelude itself (e.g. a reserved letter used as a name).
+bool prelude_parse_errors() {
+    std::vector<Token> toks = lex::tokenize(prelude());
+    std::vector<std::string> errs;
+    parse::parse_program(std::move(toks), &errs);
+    return !errs.empty();
+}
+
 } // namespace
 
 void run_stdlib_tests() {
-    // the prelude itself is well typed
+    // the prelude parses cleanly and is well typed
+    CHECK(!prelude_parse_errors());
     CHECK(!type_errors("main = 0"));
 
     // length
@@ -82,6 +91,10 @@ void run_stdlib_tests() {
     CHECK_EQ_STR(eval::show_value(run("main = drop 2 [1, 2, 3, 4, 5]")), "[ 3 4 5 ]");
     CHECK_EQ_STR(eval::show_value(run("main = drop 9 [1, 2]")), "[ ]");
 
+    // append (now defined with case + cons in the prelude)
+    CHECK_EQ_STR(eval::show_value(run("main = append [1, 2] [3, 4]")), "[ 1 2 3 4 ]");
+    CHECK_EQ_STR(eval::show_value(run("main = append [] [3, 4]")), "[ 3 4 ]");
+
     // core list axioms reachable directly
     CHECK(run("main = head [7, 8, 9]").i == 7);
     CHECK_EQ_STR(eval::show_value(run("main = tail [7, 8, 9]")), "[ 8 9 ]");
@@ -98,4 +111,47 @@ void run_stdlib_tests() {
     CHECK(run("main = length [1, 2, 3] + length [True, False]").i == 5);
     CHECK(!type_errors("main = length [1, 2, 3] + length [True, False]"));
     CHECK(run("main = length (reverse [c', e', g'])").i == 3); // length on pitches
+
+    // ---- music transforms ------------------------------------------------
+    // build a phrase from a list of pitches, sequence / stack it
+    CHECK_EQ_STR(eval::show_value(run("main = line (notes [c', e', g'])")),
+                 "(C4:1/4 :+: (E4:1/4 :+: G4:1/4))");
+    CHECK_EQ_STR(eval::show_value(run("main = chord (notes [c', e', g'])")),
+                 "(C4:1/4 :=: (E4:1/4 :=: G4:1/4))");
+
+    // transpose a whole phrase up a perfect fifth
+    CHECK_EQ_STR(eval::show_value(run("main = transpose P5 (c' e' g')")),
+                 "((G4:1/4 :+: B4:1/4) :+: D5:1/4)");
+    CHECK_EQ_STR(type_of("main = 0", "transpose"),
+                 "Transposable t0 => Interval -> t0 -> t0");
+
+    // retrograde reverses the order in time
+    CHECK_EQ_STR(eval::show_value(run("main = retrograde (c' e' g')")),
+                 "(G4:1/4 :+: (E4:1/4 :+: C4:1/4))");
+    CHECK_EQ_STR(type_of("main = 0", "retrograde"), "Music -> Music");
+
+    // melodic inversion about the first pitch — spelling mirrors too
+    // (about C4: E4 -> Ab3 [major third below], G4 -> F3 [fifth below])
+    CHECK_EQ_STR(eval::show_value(run("main = invert (c' e' g')")),
+                 "((C4:1/4 :+: Ab3:1/4) :+: F3:1/4)");
+
+    // repeat a phrase
+    CHECK_EQ_STR(eval::show_value(run("main = times 3 c'")),
+                 "(C4:1/4 :+: (C4:1/4 :+: C4:1/4))");
+    CHECK_EQ_STR(type_of("main = 0", "line"), "[Music] -> Music");
+
+    // the headline composer example: a subject in parallel with its inversion,
+    // answered up a fifth. Subject C D E G -> inverted+transposed answer G F Eb C.
+    {
+        std::string dev =
+            "subject = c' d' e' g'\n"
+            "development subj = subj `par` (invert subj ^+ P5)\n"
+            "main = development subject";
+        CHECK(!type_errors(dev));
+        eval::Value v = run(dev);
+        CHECK(v.kind == eval::ValueKind::Music);
+        CHECK_EQ_STR(eval::show_value(v),
+                     "((((C4:1/4 :+: D4:1/4) :+: E4:1/4) :+: G4:1/4)"
+                     " :=: (((G4:1/4 :+: F4:1/4) :+: Eb4:1/4) :+: C4:1/4))");
+    }
 }

@@ -1,0 +1,11 @@
+-- development.cal — the example Calliope was designed around.
+--
+-- A fugal development: the subject sounded against its own melodic inversion,
+-- answered up a perfect fifth.  Reads the way a composer means it.
+
+subject = c' d' e' g'
+
+development subj = subj `par` (invert subj ^+ P5)
+
+main = development subject
+-- => (C D E G) played together with (G F Eb C)

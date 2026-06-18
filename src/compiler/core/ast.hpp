@@ -36,8 +36,15 @@ enum class NodeKind : std::uint8_t {
     Lambda,     // kids: Param* then body; extra: param count
     Let,        // kids: Binding* then body; extra: binding count
     If,         // kids: cond, then, else
+    Case,       // kids[0]: scrutinee, kids[1..]: Alt
+    Alt,        // kids[0]: pattern, kids[1]: body
     ListLit,    // kids: elements
     Chord,      // kids: pitch notes sounding together
+
+    PatVar,     // tok: binding name
+    PatWild,    // tok: '_'
+    PatInt,     // tok: integer literal pattern
+    PatCon,     // tok: constructor (True/False/[]/:); kids: sub-patterns
 
     Param,      // tok: parameter name
     TypeAtom,   // tok: one token of a (currently unparsed) type signature

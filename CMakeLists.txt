@@ -19,6 +19,7 @@ set(CALLIOPE_CORE
     src/compiler/core/parser.cpp
     src/compiler/core/eval.cpp
     src/compiler/core/typecheck.cpp
+    src/compiler/core/driver.cpp
 )
 
 add_executable(calliope
@@ -39,6 +40,20 @@ else()
     target_compile_options(calliope PRIVATE -Wall -Wextra)
 endif()
 
+# --- interactive interpreter / REPL ---------------------------------------
+add_executable(calliope-repl
+    src/compiler/interactive.cpp
+    ${CALLIOPE_CORE}
+)
+target_include_directories(calliope-repl PRIVATE src/compiler)
+target_compile_definitions(calliope-repl PRIVATE
+    CALLIOPE_PRELUDE_PATH="${CALLIOPE_STDLIB_DIR}/prelude.cal")
+if(MSVC)
+    target_compile_options(calliope-repl PRIVATE /W4)
+else()
+    target_compile_options(calliope-repl PRIVATE -Wall -Wextra)
+endif()
+
 # --- tests (separate binary; does not link the main driver) ---------------
 enable_testing()
 
@@ -52,6 +67,7 @@ add_executable(calliope_tests
     tests/test_eval.cpp
     tests/test_typecheck.cpp
     tests/test_stdlib.cpp
+    tests/test_driver.cpp
     tests/test_main.cpp
     ${CALLIOPE_CORE}
 )
