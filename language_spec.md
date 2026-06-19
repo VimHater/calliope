@@ -454,8 +454,12 @@ answer = (^+ P5) . invert
 
 These wrap a subtree in a `Control` without touching its notes.
 
-> **Implemented so far — instruments.** `Control` and the **instrument** context are
-> built (the first `Modify` node; tempo/dynamic/key remain future work). The realized
+> **Implemented so far — instruments, tempo, velocity.** `Control` and the
+> **instrument**, **`tempo :: Int -> Music -> Music`**, and **`velocity :: Int ->
+> Music -> Music`** contexts are built (key / named dynamics remain future work).
+> `flatten` resolves each `tempo` Control into absolute seconds, so per-region tempo —
+> even different tempi running at once under `par` — works; `velocity` (0..127) is
+> stamped per note. The realized
 > spelling differs from the sketch below: instruments are a **typed enum of uppercase
 > constructors** (`Violin`, `Cello`, `Flute`, … :: `Instrument`), because lowercase
 > names like `cello`/`flute` begin with reserved pitch letters (§2) and can't be

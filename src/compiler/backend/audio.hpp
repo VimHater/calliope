@@ -22,10 +22,9 @@ namespace calliope::backend {
 
 struct AudioOptions {
     int sample_rate = 44100;
-    int bpm = 120;          // fixed tempo (no tempo Control nodes yet)
-    int velocity = 80;      // note-on velocity, matching the MIDI backend
     std::string sfz_path;   // default voice for un-instrumented notes (an .sfz path)
     std::string base_dir;   // a custom `sfz "rel/path"` resolves against this dir
+    // tempo and velocity are resolved per-note in `flatten` (TimedNote), not here.
 };
 
 // Render the Music subtree rooted at `root` to a .wav file at `path`.

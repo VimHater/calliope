@@ -133,6 +133,11 @@ void run_typecheck_tests() {
     CHECK_EQ_STR(type_of("main = withInstrument (sfz \"x.sfz\") (c d e)", "main"), "Music");
     CHECK(has_type_error("main = sfz 5")); // Str expected, Int given
 
+    // tempo / velocity wrap a phrase given an Int
+    CHECK_EQ_STR(type_of("main = tempo 90 (c d e)", "main"), "Music");
+    CHECK_EQ_STR(type_of("main = velocity 100 (c d e)", "main"), "Music");
+    CHECK(has_type_error("main = tempo c' (c d e)")); // Int expected, Pitch given
+
     // using a method at a type with NO instance is an error
     CHECK(has_type_error(std::string(desc) + "main = describe True"));
     // ^+ on a type with no Transposable instance is an error

@@ -19,12 +19,14 @@
 //   Par  a b   (:=:)    a together with b
 //   Control inst child  a `Modify` node: assign an instrument to a sub-phrase
 //
-// `Control` is the first member of the `Modify` family (spec §8); tempo / dynamics
-// / key controls will join it. It wraps a single child (in `left`) and carries the
-// control payload: either a named-instrument `instrument` id (into the instrument
-// table) or, for a user-supplied SFZ, a `sfz_path` (then `instrument` is -1). The
-// payload stays abstract here; each backend resolves it. Durations are exact
-// `Rational` whole-note fractions (quarter = 1/4), per spec O11.
+// `Control` is the `Modify` family (spec §8). It wraps a single child (in `left`)
+// and carries exactly one control payload along one axis (the others stay unset, so
+// an enclosing Control still governs them):
+//   • instrument — a named-instrument id, or a user `sfz_path` (then instrument=-1)
+//   • tempo      — beats per minute (`tempo` >= 0 means set)
+//   • velocity   — note-on velocity 0..127 (`velocity` >= 0 means set)
+// The payload stays abstract here; the flatten seam / backends resolve it. Note
+// durations are exact `Rational` whole-note fractions (quarter = 1/4), per spec O11.
 
 namespace calliope::music {
 
@@ -41,6 +43,8 @@ struct MusicNode {
     MusicId right = NoMusic;     // Seq / Par
     int instrument = -1;         // Control: named-instrument id (-1 = none / custom)
     std::string sfz_path;        // Control: user-supplied .sfz path ("" = named/none)
+    int tempo = -1;              // Control: beats per minute (-1 = unset)
+    int velocity = -1;           // Control: note-on velocity 0..127 (-1 = unset)
 };
 
 struct Music {
@@ -54,6 +58,8 @@ MusicId seq(Music& m, MusicId a, MusicId b);
 MusicId par(Music& m, MusicId a, MusicId b);
 MusicId control(Music& m, int instrument, std::string sfz_path, MusicId child);
 MusicId control(Music& m, int instrument, MusicId child); // sfz_path = "" (named)
+MusicId control_tempo(Music& m, int bpm, MusicId child);
+MusicId control_velocity(Music& m, int velocity, MusicId child);
 
 // Transpose every Note in the subtree by (diatonic steps, semitones); Rests and
 // structure are preserved. Returns a fresh subtree (input is left untouched).

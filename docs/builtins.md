@@ -131,6 +131,25 @@ and its soundfonts travel together); an absolute path is used as-is. The audio
 backend plays it through sfizz; MIDI has no program mapping for a custom soundfont,
 so it stays on a plain channel (default voice).
 
+### Tempo & velocity
+
+| Function | Type | Meaning |
+|----------|------|---------|
+| `tempo` | `Int -> Music -> Music` | play a phrase at the given tempo (beats per minute) |
+| `velocity` | `Int -> Music -> Music` | set the note-on velocity (0..127) for a phrase |
+
+Both are `Control` nodes, like instruments — they wrap a sub-phrase and apply only
+within it (an inner `tempo`/`velocity` overrides an outer one). Tempo is resolved
+into real time, so different tempi can even run at once under `par`:
+
+```
+tempo 90 subject                          -- the subject at 90 bpm
+velocity 40 accompaniment                 -- softer accompaniment
+par (tempo 120 melody) (tempo 80 drone)   -- two simultaneous tempi
+```
+
+The default (no wrapper) is 120 bpm, velocity 80.
+
 ### Predicates
 
 | Function | Type |

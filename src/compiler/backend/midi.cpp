@@ -15,17 +15,16 @@ namespace calliope::backend {
 
 namespace {
 
-// 480 ticks per quarter note → 1920 per whole note. 1920 = 2^7·3·5, so dyadic
-// durations, triplets (÷3,÷6,÷12) and quintuplets (÷5) land on exact ticks;
-// rarer tuplets round to the nearest tick.
+// 480 ticks per quarter note. `flatten` resolves tempo into absolute seconds, so we
+// emit at a fixed reference of 120 bpm (the tempo meta below stays 500000 µs/quarter):
+// a quarter = 0.5 s, hence 960 ticks per second. Note lengths then carry the real
+// (tempo-adjusted) timing while the file's notated tempo stays constant.
 constexpr int TPQN = 480;
-constexpr long long TICKS_PER_WHOLE = 4 * TPQN;
-constexpr std::uint8_t VELOCITY = 80;
+constexpr long long TICKS_PER_SEC = 2 * TPQN; // 960, at the 120 bpm reference
 
-// Whole-note fraction -> ticks (also used to place a note's absolute start, since
-// `TimedNote.start` is in whole notes too). Rounds to the nearest tick.
+// Seconds -> ticks at the reference tempo, rounded to the nearest tick.
 long long dur_ticks(const Rational& d) {
-    long long num = d.num * TICKS_PER_WHOLE;
+    long long num = d.num * TICKS_PER_SEC;
     return (num + d.den / 2) / d.den;
 }
 
@@ -84,8 +83,10 @@ bool write_midi(const music::Music& m, music::MusicId root,
         long long start = dur_ticks(ne.start);
         long long dur = dur_ticks(ne.dur);
         std::uint8_t ch = static_cast<std::uint8_t>(channel_of(ne));
+        std::uint8_t vel = static_cast<std::uint8_t>(ne.velocity < 0 ? 0
+                                                      : ne.velocity > 127 ? 127 : ne.velocity);
         evs.push_back({start, static_cast<std::uint8_t>(0x90 | ch),
-                       static_cast<std::uint8_t>(ne.key), VELOCITY});
+                       static_cast<std::uint8_t>(ne.key), vel});
         evs.push_back({start + dur, static_cast<std::uint8_t>(0x80 | ch),
                        static_cast<std::uint8_t>(ne.key), 0});
     }

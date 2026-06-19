@@ -21,13 +21,12 @@ namespace {
 constexpr int BLOCK = 512; // frames per synth render call
 
 // A note-on or note-off scheduled at an absolute sample position.
-struct SampleEv { long long sample; bool on; int key; };
+struct SampleEv { long long sample; bool on; int key; int velocity; };
 
-// Whole-note time -> sample index. seconds = r * (4*60/bpm); samples = seconds * sr.
-// Done in one integer expression (round to nearest) to avoid float drift.
-long long to_sample(const Rational& r, int sample_rate, int bpm) {
-    long long num = r.num * 240LL * sample_rate; // 240 = 4 beats * 60 s
-    long long den = r.den * static_cast<long long>(bpm);
+// Seconds (tempo already resolved by `flatten`) -> sample index, rounded to nearest.
+long long to_sample(const Rational& seconds, int sample_rate) {
+    long long num = seconds.num * sample_rate;
+    long long den = seconds.den;
     return (num + den / 2) / den;
 }
 
@@ -73,10 +72,10 @@ std::vector<SampleEv> events_of(const std::vector<TimedNote>& notes,
     evs.reserve(notes.size() * 2);
     last_end = 0;
     for (const TimedNote& n : notes) {
-        long long s = to_sample(n.start, opt.sample_rate, opt.bpm);
-        long long e = to_sample(rat_add(n.start, n.dur), opt.sample_rate, opt.bpm);
-        evs.push_back({s, true, n.key});
-        evs.push_back({e, false, n.key});
+        long long s = to_sample(n.start, opt.sample_rate);
+        long long e = to_sample(rat_add(n.start, n.dur), opt.sample_rate);
+        evs.push_back({s, true, n.key, n.velocity});
+        evs.push_back({e, false, n.key, n.velocity});
         if (e > last_end) last_end = e;
     }
     std::stable_sort(evs.begin(), evs.end(), [](const SampleEv& a, const SampleEv& b) {
@@ -110,7 +109,7 @@ std::vector<float> render_sfizz(const std::string& sfz, const std::vector<Sample
         while (ei < evs.size() && evs[ei].sample < pos + BLOCK) {
             int delay = static_cast<int>(evs[ei].sample - pos);
             if (delay < 0) delay = 0;
-            if (evs[ei].on) sfizz_send_note_on(s, delay, evs[ei].key, opt.velocity);
+            if (evs[ei].on) sfizz_send_note_on(s, delay, evs[ei].key, evs[ei].velocity);
             else            sfizz_send_note_off(s, delay, evs[ei].key, 0);
             ++ei;
         }
@@ -130,7 +129,6 @@ std::vector<float> render_tsf(const std::string& sf2, int gm, const std::vector<
     if (!f) { err = "cannot load fallback SF2 '" + sf2 + "'"; return {}; }
     tsf_set_output(f, TSF_STEREO_INTERLEAVED, opt.sample_rate, 0.0f);
     tsf_channel_set_presetnumber(f, 0, gm, 0);
-    const float vel = static_cast<float>(opt.velocity) / 127.0f;
 
     std::vector<float> out, blk(2 * BLOCK);
     const long long cap = last_end + 10LL * opt.sample_rate;
@@ -139,7 +137,8 @@ std::vector<float> render_tsf(const std::string& sf2, int gm, const std::vector<
          pos < cap && (pos < last_end || tsf_active_voice_count(f) > 0);
          pos += BLOCK) {
         while (ei < evs.size() && evs[ei].sample < pos + BLOCK) {
-            if (evs[ei].on) tsf_channel_note_on(f, 0, evs[ei].key, vel);
+            if (evs[ei].on) tsf_channel_note_on(f, 0, evs[ei].key,
+                                                static_cast<float>(evs[ei].velocity) / 127.0f);
             else            tsf_channel_note_off(f, 0, evs[ei].key);
             ++ei;
         }

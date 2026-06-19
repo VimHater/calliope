@@ -49,19 +49,21 @@ Frontend first cut exists; nothing executes music yet.
   recognized but still error ("not implemented"). `--dump tokens|ast|types` for debug.
 - `src/compiler/backend/score.{hpp,cpp}` — **shared timing seam** (`calliope::backend
   ::flatten`): walks the Music tree (Seq concatenates, Par overlays, Rest advances)
-  into a flat list of absolute-timed `TimedNote`s in **exact Rational whole-note
-  units**, with pitch already collapsed to a MIDI key (`semitones + 12`, clamped).
-  A minimal stand-in for the score IR; both `midi` and `audio` source notes from it.
+  into a flat list of absolute-timed `TimedNote`s in **exact Rational seconds** (each
+  Control's tempo baked in, so per-region / polytempo works), with pitch collapsed to
+  a MIDI key (`semitones + 12`, clamped) and a per-note velocity. A minimal stand-in
+  for the score IR; both `midi` and `audio` source notes from it.
 - `src/compiler/backend/midi.{hpp,cpp}` — **MIDI backend** (`calliope::backend
   ::write_midi`): turns `flatten`'s notes into a time-sorted note-on/off stream and
-  writes a format-0 Standard MIDI File. 480 ticks/quarter; durations → ticks (exact
-  for dyadic/triplet/quintuplet, else rounded); fixed 120 bpm, velocity 80. Each
-  distinct instrument gets its own channel + a GM program-change (bare notes stay on
-  channel 0's default voice).
+  writes a format-0 Standard MIDI File. 480 ticks/quarter; seconds → ticks at a fixed
+  120 bpm reference (the notated tempo meta stays constant; tempo shows up as scaled
+  note lengths), per-note velocity. Each distinct instrument gets its own channel + a
+  GM program-change (bare notes / custom `.sfz` stay on a default-voice channel).
 - `src/compiler/backend/audio.{hpp,cpp}` (+ `miniaudio_impl.cpp`, `tsf_impl.cpp`) —
   **audio backend** (`calliope::backend::write_wav`): groups `flatten`'s notes by
-  instrument and renders each group on its own synth (sample positions at 120 bpm),
-  mixing the groups into one stereo f32 **WAV** via **miniaudio**'s encoder (summed,
+  instrument and renders each group on its own synth (seconds → sample positions,
+  per-note velocity), mixing the groups into one stereo f32 **WAV** via **miniaudio**'s
+  encoder (summed,
   then hard-limited to [-1,1]). Per instrument: the SSO `.sfz` plays through **sfizz**
   when present, else a fetched placeholder GM **SF2** through **tsf** by GM program;
   un-instrumented notes use the `--soundfont` default (`cli::default_soundfont`, the
@@ -135,8 +137,9 @@ in (loaded units never shift the program's lines).
   `isRest` / `isSeq` / `isPar`, accessors `leftChild` / `rightChild` /
   `notePitch` / `noteDur`, `tuplet` (scales durations by m/n via
   `music::scale_dur`), `withInstrument` (wraps a phrase in a `Control` node —
-  `music::control`; the stdlib's `onInstrument` is a thin wrapper), and `sfz`
-  (`Str -> Instrument`, a custom-soundfont instrument from a `.sfz` path). Notation carries durations on notes (`c'8`), rests (`r2`),
+  `music::control`; the stdlib's `onInstrument` is a thin wrapper), `sfz`
+  (`Str -> Instrument`, a custom-soundfont instrument from a `.sfz` path), and the
+  other `Control` axes `tempo` / `velocity` (`Int -> Music -> Music`). Notation carries durations on notes (`c'8`), rests (`r2`),
   and chords — a duration after `>` applies to every note (`<c e g>2`, via the
   parser encoding it in the `Chord` node's `extra`, applied by `music::set_dur`);
   the tie operator `~` (`Phrase t => Phrase u => t
@@ -164,8 +167,9 @@ Notation desugars into it — a single pitch is a `Pitch`, but a run (`c d e`), 
 (`<c e g>`), `:+:`/`:=:`, and `r` build `Music`; durations on literals are
 honored (`c'8` = 1/8, default quarter). The builtin `Transposable Music` instance
 maps `^+`/`^-` over every note, preserving spelling + durations, so `c d e ^+ P5`
-transposes the phrase. **`Control` is the first `Modify` node** (tempo/key/dynamics
-will follow): it wraps a sub-phrase with an **instrument**. `Instrument` is a typed
+transposes the phrase. **`Control` is the `Modify` node** — it wraps a sub-phrase
+along one axis: **instrument**, **`tempo` (bpm)**, or **`velocity` (0..127)** (key /
+dynamics-by-name will follow). `Instrument` is a typed
 enum of builtin nullary constructors (`Cello`, `Flute`, … like the `Interval`
 constructors — `core/instrument.{hpp,cpp}` is the single name↔GM↔.sfz table); the
 stdlib `onInstrument :: Instrument -> Music -> Music` (over the `withInstrument`
@@ -196,11 +200,13 @@ Two backends exist. **MIDI** (`backend/midi.cpp`) writes a .mid file; **audio**
 (`backend/audio.cpp`) renders a stereo WAV through the sfizz sampler + miniaudio
 (`--emit wav --soundfont <file.sfz>`). Both share `backend/score.cpp`'s `flatten`
 (Seq concat, Par overlay, Rest advance) — the explicit-but-minimal score IR seed,
-so the time walk is no longer duplicated. Not yet built: octave-resolution pass
-(absolute works inline; `#relative` needs it), a richer score IR + live-playback /
-MusicXML backends, more prelude (intervals as a monoid, scales/keys, chords/harmony,
-durations/rhythm — `Modify`/control nodes); audio tempo/velocity are still fixed
-(120 bpm, 80) since there are no `Modify` nodes yet.
+so the time walk is no longer duplicated. **`Control` nodes carry instrument, tempo
+(`tempo :: Int -> Music -> Music`) and velocity (`velocity :: Int -> Music ->
+Music`)** — `flatten` resolves tempo into absolute seconds (polytempo across `par`
+voices works) and stamps each note's velocity; both backends honor them. Not yet
+built: octave-resolution pass (absolute works inline; `#relative` needs it), a richer
+score IR + live-playback / MusicXML backends, more prelude (intervals as a monoid,
+scales/keys, chords/harmony — and the remaining `Modify` axes: key/dynamics).
 Bootstrap: step 1 ✓ →
 step 2 ✓ → step 3 (in progress).
 

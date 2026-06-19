@@ -178,4 +178,12 @@ void run_stdlib_tests() {
         CHECK_EQ_STR(eval::show_value(v),
                      "inst(\"cello.sfz\", ((C3:1/4 :+: D3:1/4) :+: E3:1/4))");
     }
+
+    // tempo / velocity build Control nodes (shown as tempo(...)/vel(...)).
+    {
+        eval::Value t = run("main = tempo 90 (c d)");
+        CHECK_EQ_STR(eval::show_value(t), "tempo(90, (C3:1/4 :+: D3:1/4))");
+        eval::Value v = run("main = velocity 100 (c d)");
+        CHECK_EQ_STR(eval::show_value(v), "vel(100, (C3:1/4 :+: D3:1/4))");
+    }
 }

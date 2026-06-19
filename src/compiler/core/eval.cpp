@@ -54,6 +54,7 @@ enum BuiltinId {
     B_MLEFT, B_MRIGHT,
     B_TUPLET,
     B_WITHINST, B_SFZ,
+    B_TEMPO, B_VELOCITY,
 };
 
 struct BuiltinInfo { const char* name; int id; int arity; };
@@ -78,6 +79,8 @@ const BuiltinInfo kBuiltins[] = {
     {"tuplet", B_TUPLET, 3},
     {"withInstrument", B_WITHINST, 2},
     {"sfz", B_SFZ, 1},
+    {"tempo", B_TEMPO, 2},
+    {"velocity", B_VELOCITY, 2},
 };
 
 // Interval name -> (diatonic steps, semitones). Enough common ones to be useful.
@@ -318,6 +321,19 @@ Value call_builtin(Interp& I, int id, std::vector<Value>& a) {
                 return v_unit();
             }
             return v_con(a[0].str, {});
+        // ---- tempo / velocity: wrap a phrase in a Control node --------------
+        case B_TEMPO: {
+            if (a[0].i <= 0) { I.errors.push_back("tempo must be a positive bpm"); return a[1]; }
+            music::MusicId child = to_music(I, a[1]);
+            return music_value(I, music::control_tempo(*I.music, static_cast<int>(a[0].i), child));
+        }
+        case B_VELOCITY: {
+            long long v = a[0].i;
+            if (v < 0) v = 0;
+            if (v > 127) v = 127;
+            music::MusicId child = to_music(I, a[1]);
+            return music_value(I, music::control_velocity(*I.music, static_cast<int>(v), child));
+        }
     }
     I.errors.push_back("unknown builtin");
     return v_unit();

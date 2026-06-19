@@ -585,6 +585,11 @@ void seed_builtins(Checker& ck, Env& env) {
                                        t_arrow(c, t_con0(c, "Music"), t_con0(c, "Music"))));
     // sfz "path" — lift a .sfz file path into a custom Instrument value.
     add_mono("sfz", t_arrow(c, t_con0(c, "Str"), t_con0(c, "Instrument")));
+    // tempo bpm / velocity v — set a phrase's tempo / note velocity (Control nodes).
+    add_mono("tempo", t_arrow(c, t_con0(c, "Int"),
+                              t_arrow(c, t_con0(c, "Music"), t_con0(c, "Music"))));
+    add_mono("velocity", t_arrow(c, t_con0(c, "Int"),
+                                 t_arrow(c, t_con0(c, "Music"), t_con0(c, "Music"))));
     // `~` ties two matching phrases (notes, chords, …) into summed durations.
     // Like `:+:`, each operand is an independently-constrained Phrase; a bare
     // Pitch lifts, and the Music result lets ties chain.
