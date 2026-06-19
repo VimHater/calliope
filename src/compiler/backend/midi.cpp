@@ -1,11 +1,13 @@
 #include "backend/midi.hpp"
 
 #include "backend/score.hpp"
+#include "core/instrument.hpp"
 #include "core/rational.hpp"
 
 #include <algorithm>
 #include <cstdint>
 #include <fstream>
+#include <utility>
 #include <vector>
 
 namespace calliope::backend {
@@ -54,14 +56,33 @@ bool write_midi(const music::Music& m, music::MusicId root,
                 const std::string& path, std::string& err) {
     std::vector<TimedNote> notes = flatten(m, root);
 
+    // Assign a MIDI channel per distinct instrument (insertion order), skipping
+    // channel 9 (GM drums) and clamping at 15. `instrument == -1` (bare notes) gets
+    // its own channel too, but no program change (keeps the default voice).
+    std::vector<std::pair<int, int>> chans; // (instrument id, channel)
+    int next_ch = 0;
+    auto channel_of = [&](int inst) -> int {
+        for (const std::pair<int, int>& pr : chans)
+            if (pr.first == inst) return pr.second;
+        int ch = next_ch;
+        if (ch == 9) ch = 10; // skip the GM drum channel
+        if (ch > 15) ch = 15; // clamp: extra instruments share the last channel
+        chans.push_back({inst, ch});
+        next_ch = ch + 1;
+        return ch;
+    };
+
     // each note → a note-on and a note-off; sort by tick, note-off first on ties
     std::vector<RawEv> evs;
     evs.reserve(notes.size() * 2);
     for (const TimedNote& ne : notes) {
         long long start = dur_ticks(ne.start);
         long long dur = dur_ticks(ne.dur);
-        evs.push_back({start, 0x90, static_cast<std::uint8_t>(ne.key), VELOCITY});
-        evs.push_back({start + dur, 0x80, static_cast<std::uint8_t>(ne.key), 0});
+        std::uint8_t ch = static_cast<std::uint8_t>(channel_of(ne.instrument));
+        evs.push_back({start, static_cast<std::uint8_t>(0x90 | ch),
+                       static_cast<std::uint8_t>(ne.key), VELOCITY});
+        evs.push_back({start + dur, static_cast<std::uint8_t>(0x80 | ch),
+                       static_cast<std::uint8_t>(ne.key), 0});
     }
     std::stable_sort(evs.begin(), evs.end(), [](const RawEv& a, const RawEv& b) {
         if (a.tick != b.tick) return a.tick < b.tick;
@@ -74,6 +95,14 @@ bool write_midi(const music::Music& m, music::MusicId root,
     put_vlq(trk, 0);
     trk.push_back(0xFF); trk.push_back(0x51); trk.push_back(0x03);
     trk.push_back(0x07); trk.push_back(0xA1); trk.push_back(0x20);
+    // program change per instrument channel (all at t=0, before any note)
+    for (const std::pair<int, int>& pr : chans) {
+        const instrument::Info* info = instrument::by_id(pr.first);
+        if (!info) continue; // -1 / unknown: leave the channel's default voice
+        put_vlq(trk, 0);
+        trk.push_back(static_cast<std::uint8_t>(0xC0 | pr.second));
+        trk.push_back(static_cast<std::uint8_t>(info->gm & 0x7F));
+    }
     long long prev = 0;
     for (const RawEv& e : evs) {
         put_vlq(trk, static_cast<std::uint32_t>(e.tick - prev));

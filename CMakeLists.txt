@@ -12,11 +12,14 @@ endif()
 
 # Fetch the SSO soundfont library on demand (sets CALLIOPE_SOUNDFONT_DIR).
 include(${CMAKE_SOURCE_DIR}/cmake/FetchSoundfonts.cmake)
+# Fetch the small GM SF2 used as the audio fallback (sets CALLIOPE_FALLBACK_SF2).
+include(${CMAKE_SOURCE_DIR}/cmake/FetchFallbackSf2.cmake)
 
 # Core sources shared by the driver and the test binary.
 set(CALLIOPE_CORE
     src/compiler/core/rational.cpp
     src/compiler/core/pitch.cpp
+    src/compiler/core/instrument.cpp
     src/compiler/core/music.cpp
     src/compiler/core/lexer.cpp
     src/compiler/core/ast.cpp
@@ -65,11 +68,16 @@ endif()
 if(CALLIOPE_AUDIO)
     target_sources(calliope PRIVATE
         src/compiler/backend/audio.cpp
-        src/compiler/backend/miniaudio_impl.cpp)
+        src/compiler/backend/miniaudio_impl.cpp
+        src/compiler/backend/tsf_impl.cpp)
     target_include_directories(calliope PRIVATE
         third_party/libs
         third_party/libs/sfizz/include)
     target_compile_definitions(calliope PRIVATE CALLIOPE_WITH_AUDIO)
+    if(CALLIOPE_FALLBACK_SF2)
+        target_compile_definitions(calliope PRIVATE
+            CALLIOPE_FALLBACK_SF2="${CALLIOPE_FALLBACK_SF2}")
+    endif()
     file(GLOB CALLIOPE_SFIZZ_ARCHIVES "${CALLIOPE_SFIZZ_LIB_DIR}/*.a")
     find_package(Threads REQUIRED)
     target_link_libraries(calliope PRIVATE

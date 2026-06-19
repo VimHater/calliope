@@ -17,24 +17,28 @@
 //   Rest dur            silence
 //   Seq  a b   (:+:)    a then b
 //   Par  a b   (:=:)    a together with b
+//   Control inst child  a `Modify` node: assign an instrument to a sub-phrase
 //
-// `Modify` (tempo / dynamics / key controls) is not built yet — those combinators
-// don't exist as builtins. Durations are exact `Rational` whole-note fractions
-// (quarter = 1/4), per spec O11.
+// `Control` is the first member of the `Modify` family (spec §8); tempo / dynamics
+// / key controls will join it. It wraps a single child (in `left`) and carries the
+// control payload — for now an `instrument` id (into the instrument table). The id
+// stays abstract here; each backend resolves it. Durations are exact `Rational`
+// whole-note fractions (quarter = 1/4), per spec O11.
 
 namespace calliope::music {
 
 using MusicId = std::int32_t;
 constexpr MusicId NoMusic = -1;
 
-enum class MusicKind : std::uint8_t { Note, Rest, Seq, Par };
+enum class MusicKind : std::uint8_t { Note, Rest, Seq, Par, Control };
 
 struct MusicNode {
     MusicKind kind = MusicKind::Rest;
     Pitch pitch;                 // Note
     Rational dur;                // Note, Rest
-    MusicId left = NoMusic;      // Seq / Par
+    MusicId left = NoMusic;      // Seq / Par / Control (child)
     MusicId right = NoMusic;     // Seq / Par
+    int instrument = -1;         // Control: instrument id (-1 = none)
 };
 
 struct Music {
@@ -46,6 +50,7 @@ MusicId note(Music& m, Pitch p, Rational dur);
 MusicId rest(Music& m, Rational dur);
 MusicId seq(Music& m, MusicId a, MusicId b);
 MusicId par(Music& m, MusicId a, MusicId b);
+MusicId control(Music& m, int instrument, MusicId child);
 
 // Transpose every Note in the subtree by (diatonic steps, semitones); Rests and
 // structure are preserved. Returns a fresh subtree (input is left untouched).

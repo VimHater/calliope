@@ -55,15 +55,19 @@ Frontend first cut exists; nothing executes music yet.
 - `src/compiler/backend/midi.{hpp,cpp}` — **MIDI backend** (`calliope::backend
   ::write_midi`): turns `flatten`'s notes into a time-sorted note-on/off stream and
   writes a format-0 Standard MIDI File. 480 ticks/quarter; durations → ticks (exact
-  for dyadic/triplet/quintuplet, else rounded); fixed 120 bpm, velocity 80, channel 0.
-- `src/compiler/backend/audio.{hpp,cpp}` (+ `miniaudio_impl.cpp`) — **audio backend**
-  (`calliope::backend::write_wav`): drives the **sfizz** SFZ sampler block by block
-  (`flatten`'s notes → sample positions at 120 bpm) and writes a stereo f32 **WAV**
-  via **miniaudio**'s encoder. Soundfont defaults to the bundled SSO **Grand Piano**
-  (`cli::default_soundfont`); override with `--soundfont <file.sfz>`. Built with
-  `CALLIOPE_AUDIO` (ON
-  where the sfizz prebuilts exist — Linux); other binaries report it unavailable.
-  Offline render only — live playback is a later follow-up.
+  for dyadic/triplet/quintuplet, else rounded); fixed 120 bpm, velocity 80. Each
+  distinct instrument gets its own channel + a GM program-change (bare notes stay on
+  channel 0's default voice).
+- `src/compiler/backend/audio.{hpp,cpp}` (+ `miniaudio_impl.cpp`, `tsf_impl.cpp`) —
+  **audio backend** (`calliope::backend::write_wav`): groups `flatten`'s notes by
+  instrument and renders each group on its own synth (sample positions at 120 bpm),
+  mixing the groups into one stereo f32 **WAV** via **miniaudio**'s encoder (summed,
+  then hard-limited to [-1,1]). Per instrument: the SSO `.sfz` plays through **sfizz**
+  when present, else a fetched placeholder GM **SF2** through **tsf** by GM program;
+  un-instrumented notes use the `--soundfont` default (`cli::default_soundfont`, the
+  SSO Grand Piano). Built with `CALLIOPE_AUDIO` (ON where the sfizz prebuilts exist —
+  Linux); other binaries report it unavailable. Offline render only — live playback
+  is a later follow-up.
 - `src/compiler/calliopei.cpp` — `calliopei`: the interpreter. `calliopei file.cal`
   runs a file (prints `main`'s Music IR); `calliopei` with no args starts a REPL.
   The REPL keeps a **session**: a line that parses as a definition (`x = …`, a
@@ -129,8 +133,9 @@ in (loaded units never shift the program's lines).
   projections — `semitones` / `diatonicStep` / `chromaticOf` / `makePitch`; Music IR
   — constructors `note` / `noteWith` / `sequence` / `parallel`, predicates `isNote` /
   `isRest` / `isSeq` / `isPar`, accessors `leftChild` / `rightChild` /
-  `notePitch` / `noteDur`, and `tuplet` (scales durations by m/n via
-  `music::scale_dur`). Notation carries durations on notes (`c'8`), rests (`r2`),
+  `notePitch` / `noteDur`, `tuplet` (scales durations by m/n via
+  `music::scale_dur`), and `withInstrument` (wraps a phrase in a `Control` node —
+  `music::control`; the stdlib's `onInstrument` is a thin wrapper). Notation carries durations on notes (`c'8`), rests (`r2`),
   and chords — a duration after `>` applies to every note (`<c e g>2`, via the
   parser encoding it in the `Chord` node's `extra`, applied by `music::set_dur`);
   the tie operator `~` (`Phrase t => Phrase u => t
@@ -140,7 +145,8 @@ in (loaded units never shift the program's lines).
 - **Prelude (Calliope):** lists — `length` `map` `filter` `reverse` `drop`
   `foldr` `foldr1` `flip` `append`; music — `note`s/`line`/`chord`/`par`,
   `transpose`, `mapPitches`, `invert` (spelled melodic inversion about the first
-  pitch), `retrograde`, `times`, `triplet`, `reflectPitch`, `firstPitch`. The
+  pitch), `retrograde`, `times`, `triplet`, `onInstrument`, `reflectPitch`,
+  `firstPitch`. The
   headline example type-checks and runs:
   `development subj = subj `par` (invert subj ^+ P5)`.
 
@@ -152,13 +158,19 @@ continue unconditionally; inside `()`/`[]` newlines are insignificant. Notation
 runs (`c d e`) still don't cross lines.
 
 **Music IR is real now** (`music.{hpp,cpp}`): an index-pooled `Note | Rest | Seq
-| Par` tree (spec §3) that the evaluator produces as the program value. Notation
-desugars into it — a single pitch is a `Pitch`, but a run (`c d e`), a chord
+| Par | Control` tree (spec §3) that the evaluator produces as the program value.
+Notation desugars into it — a single pitch is a `Pitch`, but a run (`c d e`), a chord
 (`<c e g>`), `:+:`/`:=:`, and `r` build `Music`; durations on literals are
 honored (`c'8` = 1/8, default quarter). The builtin `Transposable Music` instance
 maps `^+`/`^-` over every note, preserving spelling + durations, so `c d e ^+ P5`
-transposes the phrase. `Modify` (tempo/key/dynamics controls) isn't built — those
-combinators don't exist yet. `:+:`/`:=:` compose via a builtin single-parameter
+transposes the phrase. **`Control` is the first `Modify` node** (tempo/key/dynamics
+will follow): it wraps a sub-phrase with an **instrument**. `Instrument` is a typed
+enum of builtin nullary constructors (`Cello`, `Flute`, … like the `Interval`
+constructors — `core/instrument.{hpp,cpp}` is the single name↔GM↔.sfz table); the
+stdlib `onInstrument :: Instrument -> Music -> Music` (over the `withInstrument`
+axiom) builds the node. The IR carries only the abstract enum id; each backend
+resolves it (MIDI → GM program + a channel per instrument; audio → an SSO `.sfz`,
+or a placeholder GM SF2 via tsf when that patch is absent). `:+:`/`:=:` compose via a builtin single-parameter
 class **`Phrase`** (instances `Pitch` and `Music`): `(:+:) :: Phrase t => Phrase u
 => t -> u -> Music`. A bare `Pitch` operand lifts to a one-note phrase, so `c' :+:
 d'` is `Music`, and a function over `:+:` stays polymorphic (`fn x = x :+: x` has
@@ -263,7 +275,8 @@ src/compiler/
   core/
     rational.{hpp,cpp}  exact Rational arithmetic (Duration/tuplet/tempo)
     pitch.{hpp,cpp}     spelled Pitch projections (semitones, diatonic_step, mk_pitch)
-    music.{hpp,cpp}     Music IR (Note|Rest|Seq|Par), index-pooled + transpose/show
+    instrument.{hpp,cpp} the Instrument lexicon: name ↔ id ↔ GM program / SSO .sfz
+    music.{hpp,cpp}     Music IR (Note|Rest|Seq|Par|Control), index-pooled + transpose/show
     token.hpp           TokenKind + Token
     lexer.{hpp,cpp}     tokenize() — reserves the pitch lexical class
     ast.{hpp,cpp}       index-pooled AST (NodeKind/Node/NodeId) + printer
@@ -275,8 +288,9 @@ src/compiler/
     score.{hpp,cpp}     Music IR → flat absolute-timed notes (flatten → [TimedNote],
                         exact Rational time) — shared timing seam, score-IR seed
     midi.{hpp,cpp}      Music IR → format-0 Standard MIDI File (write_midi)
-    audio.{hpp,cpp}     Music IR → stereo WAV via sfizz + miniaudio (write_wav)
+    audio.{hpp,cpp}     Music IR → stereo WAV via sfizz (+ tsf SF2 fallback) + miniaudio
     miniaudio_impl.cpp  the one TU that compiles MINIAUDIO_IMPLEMENTATION
+    tsf_impl.cpp        the one TU that compiles TSF_IMPLEMENTATION (SF2 fallback synth)
 standard_library/
   prelude.cal           stdlib in Calliope: list commons + music transforms
                         (line/chord/transpose/invert/retrograde/times/…)

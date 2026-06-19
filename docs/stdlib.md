@@ -65,13 +65,21 @@ melody `par` bassline        -- the two at once
 | `invert` | `Music -> Music` | melodic inversion about the phrase's first pitch |
 | `retrograde` | `Music -> Music` | play a phrase backwards in time |
 | `times` | `Int -> Music -> Music` | repeat a phrase n times (n ≥ 1) |
+| `onInstrument` | `Instrument -> Music -> Music` | play a phrase on a given instrument (a `Control` node) |
 
 ```
 transpose P5 (c' e' g')   -- G4 B4 D5
 retrograde (c' e' g')     -- G4 E4 C4
 invert (c' e' g')         -- C4 Ab3 F3   (E and G mirror below C, respelled)
 times 3 c'                -- C4 C4 C4
+onInstrument Cello (c d e)            -- the cellos play C3 D3 E3
+par (onInstrument Cello bass) (onInstrument Flute melody)   -- two voices, two instruments
 ```
+
+`Instrument` is a typed enum (`Piano`, `Violin`, `Viola`, `Cello`, `Contrabass`,
+`Strings`, `Trumpet`, `Trombone`, `Horn`, `Tuba`, `Flute`, `Oboe`, `Clarinet`,
+`Bassoon`, `Harp`, `Harpsichord`). The MIDI/audio backends sound each tagged phrase
+on its instrument; un-tagged notes use the default voice.
 
 ## A worked example
 

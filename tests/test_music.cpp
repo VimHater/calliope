@@ -1,5 +1,6 @@
 #include "test.hpp"
 
+#include "instrument.hpp"
 #include "music.hpp"
 #include "pitch.hpp"
 #include "rational.hpp"
@@ -34,4 +35,19 @@ void run_music_tests() {
     // spelling is preserved: C up a minor third (2 steps, 3 semitones) = Eb, not D#
     music::MusicId eb = music::transpose(m, c4, 2, 3);
     CHECK_EQ_STR(music::show(m, eb), "Eb4:1/4");
+
+    // a Control node wraps a phrase with an instrument; show renders inst(Name, …)
+    int viola = instrument::id_of("Viola");
+    CHECK(viola >= 0);
+    music::MusicId voiced = music::control(m, viola, s);
+    CHECK_EQ_STR(music::show(m, voiced), "inst(Viola, (C4:1/4 :+: E4:1/8))");
+
+    // transpose passes through the Control, preserving the wrapper + instrument
+    music::MusicId voiced_up = music::transpose(m, voiced, 4, 7);
+    CHECK_EQ_STR(music::show(m, voiced_up), "inst(Viola, (G4:1/4 :+: B4:1/8))");
+
+    // equal: same wrapper + child is equal; a different instrument is not
+    CHECK(music::equal(m, voiced, music::control(m, viola, music::seq(m, c4, e4))));
+    CHECK(!music::equal(m, voiced, music::control(m, instrument::id_of("Cello"),
+                                                  music::seq(m, c4, e4))));
 }

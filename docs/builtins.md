@@ -102,6 +102,22 @@ predicates, and accessors let the prelude define structural transforms (`invert`
 | `sequence` | `Music -> Music -> Music` | sequence two phrases (same as `:+:`) |
 | `parallel` | `Music -> Music -> Music` | layer two phrases (same as `:=:`) |
 | `tuplet` | `Int -> Int -> Music -> Music` | `tuplet n m` fits n notes in the time of m (scales every duration by m/n); a triplet is `tuplet 3 2` |
+| `withInstrument` | `Instrument -> Music -> Music` | wrap a phrase in a `Control` node assigning an instrument (stdlib `onInstrument` is a thin alias) |
+
+### Instruments
+
+`Instrument` is a typed enum of named constructors (uppercase, like the intervals —
+lowercase names like `cello` would collide with reserved pitch letters):
+
+```
+Piano Harpsichord Harp  Violin Viola Cello Contrabass Strings
+Trumpet Trombone Horn Tuba  Flute Oboe Clarinet Bassoon            -- :: Instrument
+```
+
+`withInstrument Cello (c d e)` tags the phrase; the MIDI backend emits the matching
+General-MIDI program (on its own channel) and the audio backend plays the matching
+Sonatina Symphonic Orchestra `.sfz` — or a placeholder GM SF2 if that patch is
+missing. Notes outside any `withInstrument` keep the default voice.
 
 ### Predicates
 

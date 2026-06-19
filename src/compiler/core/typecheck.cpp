@@ -1,5 +1,7 @@
 #include "typecheck.hpp"
 
+#include "instrument.hpp"
+
 #include <utility>
 
 namespace calliope::types {
@@ -222,6 +224,7 @@ TypeId infer(Checker& ck, Env& env, NodeId id) {
         case NodeKind::Con:
             if (n.tok.text == "True" || n.tok.text == "False") return t_con0(c, "Bool");
             if (is_interval_name(n.tok.text)) return t_con0(c, "Interval");
+            if (instrument::id_of(n.tok.text) >= 0) return t_con0(c, "Instrument");
             return new_var(c); // unknown constructor: leave open (WIP)
         case NodeKind::Var: {
             Scheme s;
@@ -577,6 +580,9 @@ void seed_builtins(Checker& ck, Env& env) {
     add_mono("tuplet", t_arrow(c, t_con0(c, "Int"),
                                t_arrow(c, t_con0(c, "Int"),
                                        t_arrow(c, t_con0(c, "Music"), t_con0(c, "Music")))));
+    // withInstrument inst music — assign an instrument to a phrase (Control node).
+    add_mono("withInstrument", t_arrow(c, t_con0(c, "Instrument"),
+                                       t_arrow(c, t_con0(c, "Music"), t_con0(c, "Music"))));
     // `~` ties two matching phrases (notes, chords, …) into summed durations.
     // Like `:+:`, each operand is an independently-constrained Phrase; a bare
     // Pitch lifts, and the Music result lets ties chain.

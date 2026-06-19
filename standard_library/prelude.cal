@@ -144,3 +144,7 @@ times n phrase = if n == 1 then phrase else sequence phrase (times (n - 1) phras
 -- a triplet: three notes in the time normally taken by two (durations * 2/3)
 triplet :: Music -> Music
 triplet phrase = tuplet 3 2 phrase
+
+-- play a phrase on a given instrument (e.g. `onInstrument Cello subject`)
+onInstrument :: Instrument -> Music -> Music
+onInstrument inst phrase = withInstrument inst phrase

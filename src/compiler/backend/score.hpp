@@ -22,6 +22,7 @@ struct TimedNote {
     Rational start;
     int key = 0;
     Rational dur;
+    int instrument = -1; // instrument id from the enclosing Control, -1 if none
 };
 
 // Flatten the subtree rooted at `root` into absolute-timed notes (time-ordered by

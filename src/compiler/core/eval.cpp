@@ -1,5 +1,7 @@
 #include "eval.hpp"
 
+#include "instrument.hpp"
+
 #include <cstdlib>
 #include <utility>
 
@@ -51,6 +53,7 @@ enum BuiltinId {
     B_ISNOTE, B_ISREST, B_ISSEQ, B_ISPAR,
     B_MLEFT, B_MRIGHT,
     B_TUPLET,
+    B_WITHINST,
 };
 
 struct BuiltinInfo { const char* name; int id; int arity; };
@@ -73,6 +76,7 @@ const BuiltinInfo kBuiltins[] = {
     {"isSeq", B_ISSEQ, 1}, {"isPar", B_ISPAR, 1},
     {"leftChild", B_MLEFT, 1}, {"rightChild", B_MRIGHT, 1},
     {"tuplet", B_TUPLET, 3},
+    {"withInstrument", B_WITHINST, 2},
 };
 
 // Interval name -> (diatonic steps, semitones). Enough common ones to be useful.
@@ -291,6 +295,16 @@ Value call_builtin(Interp& I, int id, std::vector<Value>& a) {
             Rational factor = rational(mm, n);
             music::MusicId src = to_music(I, a[2]);
             return music_value(I, music::scale_dur(*I.music, src, factor));
+        }
+        // ---- withInstrument: wrap a phrase in a Control node ----------------
+        case B_WITHINST: {
+            int id = (a[0].kind == ValueKind::Con) ? instrument::id_of(a[0].str) : -1;
+            if (id < 0) {
+                I.errors.push_back("withInstrument expects an Instrument");
+                return a[1];
+            }
+            music::MusicId child = to_music(I, a[1]);
+            return music_value(I, music::control(*I.music, id, child));
         }
     }
     I.errors.push_back("unknown builtin");

@@ -123,6 +123,12 @@ void run_typecheck_tests() {
     // builtin Transposable: ^+ is a real class method with a Pitch instance
     CHECK_EQ_STR(type_of("main = c' ^+ P5", "main"), "Pitch");
 
+    // Instrument: a typed enum of builtin constructors; withInstrument tags a phrase
+    CHECK_EQ_STR(type_of("main = Violin", "main"), "Instrument");
+    CHECK_EQ_STR(type_of("main = withInstrument Cello (c d e)", "main"), "Music");
+    // a non-Instrument where one is expected is an error (Pitch vs Instrument)
+    CHECK(has_type_error("main = withInstrument c' (c d e)"));
+
     // using a method at a type with NO instance is an error
     CHECK(has_type_error(std::string(desc) + "main = describe True"));
     // ^+ on a type with no Transposable instance is an error

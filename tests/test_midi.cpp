@@ -1,6 +1,7 @@
 #include "test.hpp"
 
 #include "backend/midi.hpp"
+#include "core/instrument.hpp"
 #include "core/music.hpp"
 #include "core/pitch.hpp"
 #include "core/rational.hpp"
@@ -50,4 +51,17 @@ void run_midi_tests() {
     CHECK(b[n - 3] == 0xFF && b[n - 2] == 0x2F && b[n - 1] == 0x00);
 
     std::remove(path.c_str());
+
+    // a Control node emits a program-change for its instrument's GM number.
+    music::Music m2;
+    int cello = instrument::id_of("Cello"); // GM 42 = 0x2A
+    music::MusicId voiced = music::control(m2, cello, music::note(m2, pitch(0, 0, 4), rational(1, 4)));
+    const std::string p2 = "test_out_inst.mid";
+    CHECK(backend::write_midi(m2, voiced, p2, err));
+    std::vector<unsigned char> b2 = read_bytes(p2);
+    bool has_prog = false;
+    for (std::size_t i = 0; i + 1 < b2.size(); i++)
+        if (b2[i] == 0xC0 && b2[i + 1] == 0x2A) { has_prog = true; break; }
+    CHECK(has_prog);
+    std::remove(p2.c_str());
 }

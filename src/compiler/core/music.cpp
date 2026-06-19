@@ -1,5 +1,7 @@
 #include "music.hpp"
 
+#include "instrument.hpp"
+
 namespace calliope::music {
 
 MusicId add(Music& m, MusicNode n) {
@@ -38,6 +40,14 @@ MusicId par(Music& m, MusicId a, MusicId b) {
     return add(m, n);
 }
 
+MusicId control(Music& m, int instrument, MusicId child) {
+    MusicNode n;
+    n.kind = MusicKind::Control;
+    n.instrument = instrument;
+    n.left = child;
+    return add(m, n);
+}
+
 MusicId transpose(Music& m, MusicId id, int dstep, int dsemi) {
     if (id == NoMusic) return NoMusic;
     // copy the node out first: add() may reallocate the pool mid-recursion.
@@ -60,6 +70,8 @@ MusicId transpose(Music& m, MusicId id, int dstep, int dsemi) {
             MusicId b = transpose(m, n.right, dstep, dsemi);
             return par(m, a, b);
         }
+        case MusicKind::Control:
+            return control(m, n.instrument, transpose(m, n.left, dstep, dsemi));
     }
     return NoMusic;
 }
@@ -80,6 +92,8 @@ MusicId scale_dur(Music& m, MusicId id, Rational factor) {
             MusicId b = scale_dur(m, n.right, factor);
             return par(m, a, b);
         }
+        case MusicKind::Control:
+            return control(m, n.instrument, scale_dur(m, n.left, factor));
     }
     return NoMusic;
 }
@@ -99,6 +113,8 @@ bool equal(const Music& m, MusicId a, MusicId b) {
         case MusicKind::Seq:
         case MusicKind::Par:
             return equal(m, na.left, nb.left) && equal(m, na.right, nb.right);
+        case MusicKind::Control:
+            return na.instrument == nb.instrument && equal(m, na.left, nb.left);
     }
     return false;
 }
@@ -119,6 +135,8 @@ MusicId set_dur(Music& m, MusicId id, Rational dur) {
             MusicId b = set_dur(m, n.right, dur);
             return par(m, a, b);
         }
+        case MusicKind::Control:
+            return control(m, n.instrument, set_dur(m, n.left, dur));
     }
     return NoMusic;
 }
@@ -144,6 +162,9 @@ MusicId tie(Music& m, MusicId a, MusicId b, bool& ok) {
             MusicId r = tie(m, na.right, nb.right, ok);
             return par(m, l, r);
         }
+        case MusicKind::Control:
+            if (na.instrument != nb.instrument) { ok = false; return NoMusic; }
+            return control(m, na.instrument, tie(m, na.left, nb.left, ok));
     }
     ok = false;
     return NoMusic;
@@ -172,6 +193,11 @@ std::string show(const Music& m, MusicId id) {
             return "(" + show(m, n.left) + " :+: " + show(m, n.right) + ")";
         case MusicKind::Par:
             return "(" + show(m, n.left) + " :=: " + show(m, n.right) + ")";
+        case MusicKind::Control: {
+            const instrument::Info* info = instrument::by_id(n.instrument);
+            std::string name = info ? info->name : "?";
+            return "inst(" + name + ", " + show(m, n.left) + ")";
+        }
     }
     return "<>";
 }

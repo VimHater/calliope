@@ -1,6 +1,7 @@
 #include "test.hpp"
 
 #include "backend/score.hpp"
+#include "core/instrument.hpp"
 #include "core/music.hpp"
 #include "core/pitch.hpp"
 #include "core/rational.hpp"
@@ -51,5 +52,25 @@ void run_score_tests() {
         CHECK(ns.size() == 1);
         CHECK(ns[0].key == 60);
         CHECK(rat_eq(ns[0].start, q));                  // pushed past the rest
+    }
+
+    // A Control node stamps its instrument onto the notes it wraps; bare notes = -1.
+    {
+        music::Music m;
+        int cello = instrument::id_of("Cello");
+        int flute = instrument::id_of("Flute");
+        CHECK(cello >= 0 && flute >= 0);
+        music::MusicId c4 = music::note(m, pitch(0, 0, 4), q);
+        music::MusicId d4 = music::note(m, pitch(1, 0, 4), q);
+        music::MusicId voiced = music::control(m, cello, music::seq(m, c4, d4));
+        music::MusicId bare = music::note(m, pitch(2, 0, 4), q);
+        // inner Control wins over an outer one
+        music::MusicId nested = music::control(m, flute, voiced);
+        music::MusicId s = music::seq(m, nested, bare);
+
+        std::vector<backend::TimedNote> ns = backend::flatten(m, s);
+        CHECK(ns.size() == 3);
+        CHECK(ns[0].instrument == cello && ns[1].instrument == cello); // inner wins
+        CHECK(ns[2].instrument == -1);                                 // bare note
     }
 }

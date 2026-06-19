@@ -454,6 +454,17 @@ answer = (^+ P5) . invert
 
 These wrap a subtree in a `Control` without touching its notes.
 
+> **Implemented so far — instruments.** `Control` and the **instrument** context are
+> built (the first `Modify` node; tempo/dynamic/key remain future work). The realized
+> spelling differs from the sketch below: instruments are a **typed enum of uppercase
+> constructors** (`Violin`, `Cello`, `Flute`, … :: `Instrument`), because lowercase
+> names like `cello`/`flute` begin with reserved pitch letters (§2) and can't be
+> identifiers. The combinator is the stdlib `onInstrument :: Instrument -> Music ->
+> Music` (over the `withInstrument` axiom). The IR stores only the abstract enum id;
+> backends resolve it — MIDI → a GM program + a channel per instrument; audio → the
+> matching SSO `.sfz` (sfizz), or a placeholder GM SF2 (tsf) when that patch is absent
+> (O9). See `core/instrument.{hpp,cpp}` for the name ↔ GM ↔ `.sfz` table.
+
 ```
 tempo      :: BPM -> Music -> Music
 dynamic    :: Dynamic -> Music -> Music

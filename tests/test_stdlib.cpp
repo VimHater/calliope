@@ -157,4 +157,15 @@ void run_stdlib_tests() {
                      "((((C4:1/4 :+: D4:1/4) :+: E4:1/4) :+: G4:1/4)"
                      " :=: (((G4:1/4 :+: F4:1/4) :+: Eb4:1/4) :+: C4:1/4))");
     }
+
+    // onInstrument: assigns an instrument, producing a Control wrapper.
+    {
+        const std::string prog = "main = onInstrument Cello (c d e)";
+        CHECK(!type_errors(prog));
+        CHECK_EQ_STR(type_of(prog, "main"), "Music");
+        eval::Value v = run(prog);
+        CHECK(v.kind == eval::ValueKind::Music);
+        CHECK_EQ_STR(eval::show_value(v),
+                     "inst(Cello, ((C3:1/4 :+: D3:1/4) :+: E3:1/4))");
+    }
 }
