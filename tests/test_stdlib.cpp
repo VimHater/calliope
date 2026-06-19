@@ -196,4 +196,13 @@ void run_stdlib_tests() {
         eval::Value v = run("main = velocity 100 (c d)");
         CHECK_EQ_STR(eval::show_value(v), "vel(100, (C3:1/4 :+: D3:1/4))");
     }
+
+    // a bare pitch lifts to a one-note phrase in the Control builders (no wrapper)
+    {
+        CHECK_EQ_STR(eval::show_value(run("main = onInstrument Cello c")),
+                     "inst(Cello, C3:1/4)");
+        CHECK_EQ_STR(eval::show_value(run("main = tempo 90 c'")), "tempo(90, C4:1/4)");
+        CHECK_EQ_STR(eval::show_value(run("main = velocity 40 c'")), "vel(40, C4:1/4)");
+        CHECK(!type_errors("main = onInstrument Cello c'"));
+    }
 }

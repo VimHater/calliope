@@ -102,7 +102,7 @@ predicates, and accessors let the prelude define structural transforms (`invert`
 | `sequence` | `Music -> Music -> Music` | sequence two phrases (same as `:+:`) |
 | `parallel` | `Music -> Music -> Music` | layer two phrases (same as `:=:`) |
 | `tuplet` | `Int -> Int -> Music -> Music` | `tuplet n m` fits n notes in the time of m (scales every duration by m/n); a triplet is `tuplet 3 2` |
-| `withInstrument` | `Instrument -> Music -> Music` | wrap a phrase in a `Control` node assigning an instrument (stdlib `onInstrument` is a thin alias) |
+| `withInstrument` | `Phrase t => Instrument -> t -> Music` | wrap a phrase in a `Control` node assigning an instrument (stdlib `onInstrument` is a thin alias); a bare pitch lifts, so `withInstrument Cello c` works |
 | `sfz` | `Str -> Instrument` | a custom instrument from a `.sfz` file path (relative to the source file, or absolute) |
 | `gm` | `Int -> Instrument` | a custom instrument from a raw General-MIDI program number (0..127) |
 
@@ -146,8 +146,8 @@ notation — so use `myCello`, `nylon`, `cello2`, …)
 
 | Function | Type | Meaning |
 |----------|------|---------|
-| `tempo` | `Int -> Music -> Music` | play a phrase at the given tempo (beats per minute) |
-| `velocity` | `Int -> Music -> Music` | set the note-on velocity (0..127) for a phrase |
+| `tempo` | `Phrase t => Int -> t -> Music` | play a phrase at the given tempo (beats per minute) |
+| `velocity` | `Phrase t => Int -> t -> Music` | set the note-on velocity (0..127) for a phrase |
 
 Both are `Control` nodes, like instruments — they wrap a sub-phrase and apply only
 within it (an inner `tempo`/`velocity` overrides an outer one). Tempo is resolved

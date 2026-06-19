@@ -20,6 +20,13 @@ namespace {
 
 constexpr int BLOCK = 512; // frames per synth render call
 
+// sfizz preload size (floats per sample held in RAM). We render offline, so there is
+// no streaming thread to keep up — every sample must be fully resident. sfizz preloads
+// min(sample_length, preload_size) per sample, so the maximum means "load whole
+// samples, never stream", and short samples still cost only their real size (the cap
+// self-adjusts down). Memory = the instrument's actual decoded sample data.
+constexpr unsigned int PRELOAD_FLOATS = 0xFFFFFFFFu; // UINT_MAX: preload entire samples
+
 // A note-on or note-off scheduled at an absolute sample position.
 struct SampleEv { long long sample; bool on; int key; int velocity; };
 
@@ -98,6 +105,11 @@ std::vector<float> render_sfizz(const std::string& sfz, const std::vector<Sample
     }
     sfizz_set_sample_rate(s, static_cast<float>(opt.sample_rate));
     sfizz_set_samples_per_block(s, BLOCK);
+    // sfizz streams the tail of each sample from disk on a background thread, keeping
+    // only `preload_size` floats (default 8192 ≈ 0.19 s) in RAM. An offline render
+    // outruns that loader, so a held note falls silent once the preloaded head ends.
+    // Bump the preload so whole samples sit in memory — no streaming needed offline.
+    sfizz_set_preload_size(s, PRELOAD_FLOATS);
 
     std::vector<float> out, left(BLOCK), right(BLOCK);
     float* ch[2] = {left.data(), right.data()};

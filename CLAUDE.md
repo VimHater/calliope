@@ -174,8 +174,9 @@ along one axis: **instrument**, **`tempo` (bpm)**, or **`velocity` (0..127)** (k
 dynamics-by-name will follow). `Instrument` is a typed
 enum of builtin nullary constructors (`Cello`, `Flute`, … like the `Interval`
 constructors — `core/instrument.{hpp,cpp}` is the single name↔GM↔.sfz table); the
-stdlib `onInstrument :: Instrument -> Music -> Music` (over the `withInstrument`
-axiom) builds the node. **Custom instruments** outside the enum: `sfz :: Str ->
+stdlib `onInstrument :: Phrase t => Instrument -> t -> Music` (over the
+`withInstrument` axiom) builds the node — like `:+:`, the phrase arg is a `Phrase`,
+so a bare pitch lifts (`onInstrument Cello c`); `tempo` / `velocity` lift the same way. **Custom instruments** outside the enum: `sfz :: Str ->
 Instrument` (`onInstrument (sfz "cello.sfz") phrase`) and `gm :: Int -> Instrument`
 (a raw GM program number) — both first-class values, so a user can `name = sfz "…"`
 / `name = gm 24` and reuse it. So the Control node's instrument axis carries one of

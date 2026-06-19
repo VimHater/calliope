@@ -580,18 +580,26 @@ void seed_builtins(Checker& ck, Env& env) {
     add_mono("tuplet", t_arrow(c, t_con0(c, "Int"),
                                t_arrow(c, t_con0(c, "Int"),
                                        t_arrow(c, t_con0(c, "Music"), t_con0(c, "Music")))));
-    // withInstrument inst music — assign an instrument to a phrase (Control node).
-    add_mono("withInstrument", t_arrow(c, t_con0(c, "Instrument"),
-                                       t_arrow(c, t_con0(c, "Music"), t_con0(c, "Music"))));
+    // The Control-node builders take a Phrase (like `:+:`): a bare pitch lifts to a
+    // one-note phrase, so `tempo 90 c'` / `onInstrument Cello c` work without an
+    // explicit Music wrapper. The phrase arg is `Phrase t => t`, the result Music.
+    //   withInstrument :: Phrase t => Instrument -> t -> Music
+    //   tempo, velocity :: Phrase t => Int -> t -> Music
+    auto add_phrase_control = [&](const char* name, const char* head) {
+        TypeId a = new_var(c); int av = c.pool[a].var;
+        Scheme s;
+        s.vars.push_back(av);
+        s.type = t_arrow(c, t_con0(c, head), t_arrow(c, a, t_con0(c, "Music")));
+        s.constraints.emplace_back("Phrase", av);
+        env.push_back({name, s});
+    };
+    add_phrase_control("withInstrument", "Instrument");
+    add_phrase_control("tempo", "Int");
+    add_phrase_control("velocity", "Int");
     // sfz "path" — lift a .sfz file path into a custom Instrument value.
     add_mono("sfz", t_arrow(c, t_con0(c, "Str"), t_con0(c, "Instrument")));
     // gm n — lift a General-MIDI program number into a custom Instrument value.
     add_mono("gm", t_arrow(c, t_con0(c, "Int"), t_con0(c, "Instrument")));
-    // tempo bpm / velocity v — set a phrase's tempo / note velocity (Control nodes).
-    add_mono("tempo", t_arrow(c, t_con0(c, "Int"),
-                              t_arrow(c, t_con0(c, "Music"), t_con0(c, "Music"))));
-    add_mono("velocity", t_arrow(c, t_con0(c, "Int"),
-                                 t_arrow(c, t_con0(c, "Music"), t_con0(c, "Music"))));
     // `~` ties two matching phrases (notes, chords, …) into summed durations.
     // Like `:+:`, each operand is an independently-constrained Phrase; a bare
     // Pitch lifts, and the Music result lets ties chain.

@@ -65,7 +65,7 @@ melody `par` bassline        -- the two at once
 | `invert` | `Music -> Music` | melodic inversion about the phrase's first pitch |
 | `retrograde` | `Music -> Music` | play a phrase backwards in time |
 | `times` | `Int -> Music -> Music` | repeat a phrase n times (n ≥ 1) |
-| `onInstrument` | `Instrument -> Music -> Music` | play a phrase on a given instrument (a `Control` node) |
+| `onInstrument` | `Phrase t => Instrument -> t -> Music` | play a phrase on a given instrument (a `Control` node); a bare pitch lifts, so `onInstrument Cello c` works |
 
 ```
 transpose P5 (c' e' g')   -- G4 B4 D5
