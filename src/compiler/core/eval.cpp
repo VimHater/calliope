@@ -530,18 +530,18 @@ Value eval(Interp& I, NodeId id, const std::shared_ptr<Env>& env) {
             if (op == ":+:") return music_value(I, music::seq(*I.music, to_music(I, l), to_music(I, r)));
             if (op == ":=:") return music_value(I, music::par(*I.music, to_music(I, l), to_music(I, r)));
             if (op == "~") {
-                // tie: two same-pitch notes join into one of summed duration
-                if (l.kind != ValueKind::Pitch || r.kind != ValueKind::Pitch) {
-                    I.errors.push_back("(~): tie expects two pitch literals");
+                // tie: matching phrases (note, chord, …) join with summed durations.
+                // Operands lift to Music, so it works on pitches, chords, and ties
+                // chain (the Music result is itself a valid left operand).
+                music::MusicId a = to_music(I, l);
+                music::MusicId b = to_music(I, r);
+                bool ok = true;
+                music::MusicId t = music::tie(*I.music, a, b, ok);
+                if (!ok) {
+                    I.errors.push_back("(~): tied phrases must have the same pitches and shape");
                     return v_unit();
                 }
-                if (!pitch_eq(l.pitch, r.pitch)) {
-                    I.errors.push_back("(~): tied notes must be the same pitch");
-                    return v_unit();
-                }
-                Rational dl = (l.rat.num > 0) ? l.rat : rational(1, 4);
-                Rational dr = (r.rat.num > 0) ? r.rat : rational(1, 4);
-                return music_value(I, music::note(*I.music, l.pitch, rat_add(dl, dr)));
+                return music_value(I, t);
             }
             if (op == ":*:") {
                 // phrase :*: n  —  n copies in a row (right-leaning, like `times`)

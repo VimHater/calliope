@@ -136,14 +136,30 @@ std::string directory_of(std::string_view path) {
 }
 
 bool is_definition(std::string_view program) {
-    std::vector<std::string> errs;
-    ast::Ast a = parse::parse_program(lex::tokenize(program), &errs);
-    if (!errs.empty() || a.root == ast::NoNode) return false;
-    const ast::Node& prog = a.nodes[a.root];
-    if (prog.kids.empty()) return false;
-    ast::NodeKind k = a.nodes[prog.kids[0]].kind;
-    return k == ast::NodeKind::Binding || k == ast::NodeKind::TypeSig ||
-           k == ast::NodeKind::ClassDecl || k == ast::NodeKind::InstanceDecl;
+    // Decide by *tokens*, not by a successful parse: a line that begins like a
+    // definition is one even if its body is malformed (`x = <bad>`), so the REPL
+    // routes it to the define path and the real error surfaces — instead of
+    // wrapping it as an expression (`main = x = …`) and cascading.
+    std::vector<Token> toks = lex::tokenize(program);
+    if (toks.empty() || toks[0].kind != TokenKind::Ident) return false;
+    std::string_view head = toks[0].text;
+    if (head == "class" || head == "instance") return true;
+    // any other leading keyword starts an expression (let/if/case/…), not a def.
+    static const char* kws[] = {"let", "in", "where", "if", "then", "else",
+                                "case", "of", "data", "type", "and", "or"};
+    for (const char* kw : kws) if (head == kw) return false;
+    // a binding has a top-level `=` (Equals, not `==`); a signature a top-level `::`.
+    int depth = 0;
+    for (const Token& t : toks) {
+        switch (t.kind) {
+            case TokenKind::LParen: case TokenKind::LBracket: depth++; break;
+            case TokenKind::RParen: case TokenKind::RBracket: depth--; break;
+            case TokenKind::Equals:     if (depth == 0) return true; break;
+            case TokenKind::ColonColon: if (depth == 0) return true; break;
+            default: break;
+        }
+    }
+    return false;
 }
 
 } // namespace calliope::driver

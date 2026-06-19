@@ -84,6 +84,32 @@ MusicId scale_dur(Music& m, MusicId id, Rational factor) {
     return NoMusic;
 }
 
+MusicId tie(Music& m, MusicId a, MusicId b, bool& ok) {
+    if (a == NoMusic || b == NoMusic) { ok = false; return NoMusic; }
+    MusicNode na = m.nodes[a]; // copy: add() may reallocate the pool mid-recursion
+    MusicNode nb = m.nodes[b];
+    if (na.kind != nb.kind) { ok = false; return NoMusic; }
+    switch (na.kind) {
+        case MusicKind::Note:
+            if (!pitch_eq(na.pitch, nb.pitch)) { ok = false; return NoMusic; }
+            return note(m, na.pitch, rat_add(na.dur, nb.dur));
+        case MusicKind::Rest:
+            return rest(m, rat_add(na.dur, nb.dur));
+        case MusicKind::Seq: {
+            MusicId l = tie(m, na.left, nb.left, ok);
+            MusicId r = tie(m, na.right, nb.right, ok);
+            return seq(m, l, r);
+        }
+        case MusicKind::Par: {
+            MusicId l = tie(m, na.left, nb.left, ok);
+            MusicId r = tie(m, na.right, nb.right, ok);
+            return par(m, l, r);
+        }
+    }
+    ok = false;
+    return NoMusic;
+}
+
 namespace {
 std::string show_dur(const Rational& d) {
     return std::to_string(d.num) + "/" + std::to_string(d.den);

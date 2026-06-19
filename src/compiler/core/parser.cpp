@@ -48,10 +48,24 @@ bool at_continuation(Parser& p) {
 void error(Parser& p, const char* msg) {
     const Token& t = cur(p);
     char buf[256];
-    std::snprintf(buf, sizeof buf, "%d:%d: %s (near '%.*s')",
-                  t.line, t.col, msg,
-                  static_cast<int>(t.text.size()), t.text.data());
+    // Render the location nicely: an End/Newline token has no text, so the old
+    // "(near '')" was useless — name the place instead.
+    if (t.kind == TokenKind::End)
+        std::snprintf(buf, sizeof buf, "%d:%d: %s (at end of input)", t.line, t.col, msg);
+    else if (t.kind == TokenKind::Newline)
+        std::snprintf(buf, sizeof buf, "%d:%d: %s (at end of line)", t.line, t.col, msg);
+    else
+        std::snprintf(buf, sizeof buf, "%d:%d: %s (near '%.*s')", t.line, t.col, msg,
+                      static_cast<int>(t.text.size()), t.text.data());
     p.errors.emplace_back(buf);
+}
+
+// A binary operator was given no right operand (e.g. a dangling `c'4 ~`).
+void error_after_op(Parser& p, const Token& op) {
+    char m[128];
+    std::snprintf(m, sizeof m, "expected an expression after operator '%.*s'",
+                  static_cast<int>(op.text.size()), op.text.data());
+    error(p, m);
 }
 
 bool is_keyword(std::string_view s) {
@@ -160,6 +174,13 @@ NodeId parse_chord(Parser& p) {
     while (cur(p).kind != TokenKind::Greater &&
            cur(p).kind != TokenKind::End &&
            cur(p).kind != TokenKind::Newline) {
+        TokenKind k = cur(p).kind;
+        // a chord holds pitches (and rests / nested chords) — not operators like `~`.
+        if (k != TokenKind::Pitch && k != TokenKind::Rest && k != TokenKind::Less) {
+            error(p, "unexpected token inside chord (expected a pitch or '>')");
+            advance(p); // skip the offender and keep scanning for the closing '>'
+            continue;
+        }
         n.kids.push_back(parse_primary(p));
     }
     if (cur(p).kind == TokenKind::Greater) advance(p);
@@ -453,6 +474,10 @@ NodeId parse_expr(Parser& p, int min_prec) {
 
         int next_min = right ? prec : prec + 1;
         skip_newlines(p); // operator's right operand may start on the next line
+        if (cur(p).kind == TokenKind::End || cur(p).kind == TokenKind::Newline) {
+            error_after_op(p, op_tok); // dangling operator, no right operand
+            return lhs;
+        }
         NodeId rhs = parse_expr(p, next_min);
         Node n;
         n.kind = NodeKind::BinOp;
@@ -703,7 +728,9 @@ NodeId parse_toplevel(Parser& p) {
         return parse_binding(p, true);
     }
     error(p, "expected a top-level declaration");
-    advance(p);
+    // recover: drop the rest of this line so a single stray token doesn't spawn
+    // one "expected a top-level declaration" per leftover token (a cascade).
+    while (cur(p).kind != TokenKind::Newline && cur(p).kind != TokenKind::End) advance(p);
     return mk(p, NodeKind::Error, t);
 }
 

@@ -54,9 +54,10 @@ g'8.      -- G4, dotted eighth
   its own duration, so `<c'2 e'2 g'2>` is a half-note triad.
 - A **rest** is `r` (or `R`, or the spacer `s`); it is `Music`. Rests take a
   duration like notes: `r2` is a half rest, `r4.` a dotted-quarter rest.
-- A **tie** `~` joins two **same-pitch** notes into one of summed duration:
-  `c'4 ~ c'8` is `C4` held `3/8`. (Binary only — no chaining yet; tying two
-  different pitches is an error.)
+- A **tie** `~` joins two **matching** phrases into one with summed durations:
+  `c'4 ~ c'8` is `C4` held `3/8`, `<c e g> ~ <c e g>` is a held chord, and ties
+  chain (`c'4 ~ c'8 ~ c'8`). The two sides must have the same pitches and shape,
+  otherwise it is a runtime error.
 - A **tuplet** fits notes against the beat: `tuplet n m music` plays `n` notes in
   the time of `m` (scaling every duration by `m/n`). A triplet is `tuplet 3 2`
   (or the prelude's `triplet`): `tuplet 3 2 (c c c)` makes three `1/6` notes.

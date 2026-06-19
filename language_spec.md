@@ -381,13 +381,14 @@ times   :: Int -> Music -> Music          -- = flip (:*:), repeat n times sequen
 tuplet  :: Int -> Int -> Music -> Music   -- tuplet 3 2 (c c c) — eighth triplet
 triplet :: Music -> Music                 -- = tuplet 3 2  (prelude)
 
--- Ties: join two same-pitch notes into one of summed duration
-(~)     :: Pitch -> Pitch -> Music        -- c'4 ~ c'8 = one C4 held 3/8
+-- Ties: join two matching phrases into one with summed durations
+(~)     :: Phrase t => Phrase u => t -> u -> Music  -- c'4 ~ c'8 = C4 held 3/8
 ```
 
 > **As implemented:** rests carry durations (`r2`, `r4.`), as do chord notes
-> (`<c'2 e'2 g'2>`). `~` is binary only (no chaining yet) and rejects a tie
-> between different pitches.
+> (`<c'2 e'2 g'2>`). `~` ties notes, chords (`<c e g> ~ <c e g>` is a held
+> chord), and chains (`c'4 ~ c'8 ~ c'8`); the two sides must have the same
+> pitches and shape, else it is a runtime error.
 
 So `motif1 :+: motif2` and ``motif1 `andThen` motif2`` are the same;
 `upper :=: lower` and ``upper `par` lower`` are the same.

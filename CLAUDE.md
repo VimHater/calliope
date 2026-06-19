@@ -106,8 +106,10 @@ in (loaded units never shift the program's lines).
   `isRest` / `isSeq` / `isPar`, accessors `leftChild` / `rightChild` /
   `notePitch` / `noteDur`, and `tuplet` (scales durations by m/n via
   `music::scale_dur`). Notation carries durations on notes (`c'8`), rests (`r2`),
-  and chord notes (`<c'2 e'2>`); the tie operator `~` (`Pitch -> Pitch -> Music`,
-  binary, same-pitch) sums two notes into one held note.
+  and chord notes (`<c'2 e'2>`); the tie operator `~` (`Phrase t => Phrase u => t
+  -> u -> Music`, via `music::tie`) joins two matching phrases — notes, chords
+  (`<c e g> ~ <c e g>`), and chains — summing durations; mismatched pitch/shape is
+  a runtime error.
 - **Prelude (Calliope):** lists — `length` `map` `filter` `reverse` `drop`
   `foldr` `foldr1` `flip` `append`; music — `note`s/`line`/`chord`/`par`,
   `transpose`, `mapPitches`, `invert` (spelled melodic inversion about the first

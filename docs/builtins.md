@@ -18,7 +18,7 @@ including all music theory — is written in Calliope in the
 | `:+:` | `Phrase t => Phrase u => t -> u -> Music` | sequential composition |
 | `:=:` | `Phrase t => Phrase u => t -> u -> Music` | parallel composition |
 | `:*:` | `Phrase t => t -> Int -> Music` | repeat a phrase n times in a row (`motif :*: 4`); binds tighter than `:+:`; `n >= 1` |
-| `~` | `Pitch -> Pitch -> Music` | tie two **same-pitch** notes into one of summed duration (`c'4 ~ c'8` = `C4:3/8`); binary only (no chaining yet) |
+| `~` | `Phrase t => Phrase u => t -> u -> Music` | tie two **matching** phrases (notes, chords, …) into one with summed durations (`c'4 ~ c'8` = `C4:3/8`; `<c e g> ~ <c e g>` = a held chord); ties chain (`c'4 ~ c'8 ~ c'8`). Operands must have the same pitches and shape, else a runtime error |
 
 `not :: Bool -> Bool` is a prefix function. `:+:`/`:=:` are methods of the builtin
 `Phrase` class (instances `Pitch` and `Music`): a bare `Pitch` operand lifts to a

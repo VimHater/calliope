@@ -565,8 +565,21 @@ void seed_builtins(Checker& ck, Env& env) {
     add_mono("tuplet", t_arrow(c, t_con0(c, "Int"),
                                t_arrow(c, t_con0(c, "Int"),
                                        t_arrow(c, t_con0(c, "Music"), t_con0(c, "Music")))));
-    // `~` ties two same-pitch notes into one of summed duration.
-    add_mono("~", t_arrow(c, t_con0(c, "Pitch"), t_arrow(c, t_con0(c, "Pitch"), t_con0(c, "Music"))));
+    // `~` ties two matching phrases (notes, chords, …) into summed durations.
+    // Like `:+:`, each operand is an independently-constrained Phrase; a bare
+    // Pitch lifts, and the Music result lets ties chain.
+    //   (~) :: Phrase t => Phrase u => t -> u -> Music
+    {
+        TypeId a = new_var(c); int av = c.pool[a].var;
+        TypeId b = new_var(c); int bv = c.pool[b].var;
+        Scheme s;
+        s.vars.push_back(av);
+        s.vars.push_back(bv);
+        s.type = t_arrow(c, a, t_arrow(c, b, t_con0(c, "Music")));
+        s.constraints.emplace_back("Phrase", av);
+        s.constraints.emplace_back("Phrase", bv);
+        env.push_back({"~", s});
+    }
     add_mono("semitones", t_arrow(c, t_con0(c, "Pitch"), t_con0(c, "Int")));
 
     // list axioms — polymorphic schemes (the stdlib is built on these):

@@ -56,6 +56,11 @@ MusicId transpose(Music& m, MusicId id, int dstep, int dsemi);
 // a fresh subtree.
 MusicId scale_dur(Music& m, MusicId id, Rational factor);
 
+// Tie two subtrees: they must have identical shape and pitch (a note tied to the
+// same note, a chord to the same chord, …); the result keeps that shape with each
+// Note/Rest duration summed. Sets ok=false (and returns NoMusic) on any mismatch.
+MusicId tie(Music& m, MusicId a, MusicId b, bool& ok);
+
 // Debug rendering, e.g. "(C4:1/4 :+: D4:1/4)".
 std::string show(const Music& m, MusicId id);
 

@@ -142,6 +142,11 @@ void run_eval_tests() {
                  "((C4:1/6 :+: C4:1/6) :+: C4:1/6)");
     // tie: two same-pitch notes join into one of summed duration
     CHECK_EQ_STR(eval::show_value(run_main("c'4 ~ c'8")), "C4:3/8");
+    // ties chain (the Music result is itself a valid left operand)
+    CHECK_EQ_STR(eval::show_value(run_main("c'4 ~ c'8 ~ c'8")), "C4:1/2");
+    // a tied chord: matching chords merge, each note's duration summed
+    CHECK_EQ_STR(eval::show_value(run_main("<c' e' g'> ~ <c' e' g'>")),
+                 "((C4:1/2 :=: E4:1/2) :=: G4:1/2)");
 
     // ---- pipe, cons, case ------------------------------------------------
     // pipe: x |> f = f x (left-associative, so it chains)
