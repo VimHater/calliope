@@ -12,17 +12,20 @@
 // is collapsed to MIDI keys at this playback boundary; exact-rational durations
 // become sample positions at a fixed tempo.
 //
-// Requires the sfizz soundfont (`opt.sfz_path`, an .sfz instrument) — there is no
-// default. This header is backend-agnostic; the implementation links sfizz +
-// miniaudio and is compiled only into binaries built with CALLIOPE_WITH_AUDIO.
+// Notes are grouped by instrument (named id or a custom `sfz "..."` path); each
+// group renders on its own synth — the matching SSO .sfz via sfizz, else a
+// placeholder GM SF2 via tsf — and the groups are summed. This header is
+// backend-agnostic; the implementation links sfizz + tsf + miniaudio and is
+// compiled only into binaries built with CALLIOPE_WITH_AUDIO.
 
 namespace calliope::backend {
 
 struct AudioOptions {
     int sample_rate = 44100;
-    int bpm = 120;          // fixed tempo (no Modify/Control nodes yet)
+    int bpm = 120;          // fixed tempo (no tempo Control nodes yet)
     int velocity = 80;      // note-on velocity, matching the MIDI backend
-    std::string sfz_path;   // required: path to an .sfz instrument
+    std::string sfz_path;   // default voice for un-instrumented notes (an .sfz path)
+    std::string base_dir;   // a custom `sfz "rel/path"` resolves against this dir
 };
 
 // Render the Music subtree rooted at `root` to a .wav file at `path`.

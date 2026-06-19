@@ -1,0 +1,27 @@
+-- Custom soundfonts: `sfz "<path>"` is an Instrument, like `Cello` or `Flute`,
+-- but loaded from a .sfz file you point at instead of the built-in enum.
+--
+--   onInstrument (sfz "path/to/patch.sfz") phrase
+--
+-- A relative path resolves against THIS file's directory (so the example runs from
+-- any working directory); an absolute path is used as-is. Here we borrow an .sfz
+-- from the vendored Sonatina Symphonic Orchestra under third_party/.
+--
+--   calliope examples/custom-instrument.cal                -- print the Music IR
+--   calliope examples/custom-instrument.cal -o out.wav      -- render (audio)
+--
+-- Audio plays the custom .sfz through sfizz. (MIDI has no GM mapping for a custom
+-- soundfont, so `-o out.mid` keeps it on a plain channel / default voice.)
+
+#load "prelude"
+
+harp :: Instrument
+harp = sfz "../third_party/soundfonts/sso/Sonatina Symphonic Orchestra/Concert Harp.sfz"
+
+phrase :: Music
+phrase = c' e' g' e' c' e' g' e'
+
+-- the harp arpeggio under a flute line from the built-in enum
+main :: Music
+main = par (onInstrument harp phrase)
+           (onInstrument Flute (g' a' g' e'))

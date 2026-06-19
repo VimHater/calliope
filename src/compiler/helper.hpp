@@ -40,9 +40,10 @@ std::string ext_of(const std::string& path);            // "song.mid" -> "mid"
 std::string replace_ext(const std::string& path, const std::string& newext);
 
 // Write `main`'s value through the chosen backend (out_path "" = stdout, IR only).
-// `soundfont` is the .sfz instrument for audio backends ("" if none given).
+// `soundfont` is the default .sfz voice for audio ("" if none); `base_dir` is the
+// source file's directory, against which a custom `sfz "rel/path"` resolves.
 // Returns the process exit code.
 int emit_output(const driver::Compilation& c, Emit emit, const std::string& out_path,
-                const std::string& soundfont);
+                const std::string& soundfont, const std::string& base_dir);
 
 } // namespace calliope::cli

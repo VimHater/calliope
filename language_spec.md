@@ -463,7 +463,10 @@ These wrap a subtree in a `Control` without touching its notes.
 > Music` (over the `withInstrument` axiom). The IR stores only the abstract enum id;
 > backends resolve it — MIDI → a GM program + a channel per instrument; audio → the
 > matching SSO `.sfz` (sfizz), or a placeholder GM SF2 (tsf) when that patch is absent
-> (O9). See `core/instrument.{hpp,cpp}` for the name ↔ GM ↔ `.sfz` table.
+> (O9). See `core/instrument.{hpp,cpp}` for the name ↔ GM ↔ `.sfz` table. A soundfont
+> outside the enum is `sfz :: Str -> Instrument` (`onInstrument (sfz "x.sfz") phrase`):
+> the `Control` then carries a `.sfz` path (relative → the source file's dir, absolute
+> as-is) the audio backend plays directly through sfizz.
 
 ```
 tempo      :: BPM -> Music -> Music

@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <fstream>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -57,17 +58,21 @@ bool write_midi(const music::Music& m, music::MusicId root,
     std::vector<TimedNote> notes = flatten(m, root);
 
     // Assign a MIDI channel per distinct instrument (insertion order), skipping
-    // channel 9 (GM drums) and clamping at 15. `instrument == -1` (bare notes) gets
-    // its own channel too, but no program change (keeps the default voice).
-    std::vector<std::pair<int, int>> chans; // (instrument id, channel)
+    // channel 9 (GM drums) and clamping at 15. Named instruments key on their id; a
+    // custom .sfz keys on its path (no GM program — it keeps the default voice), as
+    // do bare notes (`instrument == -1`, no path).
+    struct Chan { std::string key; int ch; int inst; };
+    std::vector<Chan> chans;
     int next_ch = 0;
-    auto channel_of = [&](int inst) -> int {
-        for (const std::pair<int, int>& pr : chans)
-            if (pr.first == inst) return pr.second;
+    auto channel_of = [&](const TimedNote& ne) -> int {
+        std::string key = ne.sfz_path.empty() ? ("#" + std::to_string(ne.instrument))
+                                              : ("@" + ne.sfz_path);
+        for (const Chan& cn : chans)
+            if (cn.key == key) return cn.ch;
         int ch = next_ch;
         if (ch == 9) ch = 10; // skip the GM drum channel
         if (ch > 15) ch = 15; // clamp: extra instruments share the last channel
-        chans.push_back({inst, ch});
+        chans.push_back({key, ch, ne.sfz_path.empty() ? ne.instrument : -1});
         next_ch = ch + 1;
         return ch;
     };
@@ -78,7 +83,7 @@ bool write_midi(const music::Music& m, music::MusicId root,
     for (const TimedNote& ne : notes) {
         long long start = dur_ticks(ne.start);
         long long dur = dur_ticks(ne.dur);
-        std::uint8_t ch = static_cast<std::uint8_t>(channel_of(ne.instrument));
+        std::uint8_t ch = static_cast<std::uint8_t>(channel_of(ne));
         evs.push_back({start, static_cast<std::uint8_t>(0x90 | ch),
                        static_cast<std::uint8_t>(ne.key), VELOCITY});
         evs.push_back({start + dur, static_cast<std::uint8_t>(0x80 | ch),
@@ -96,11 +101,11 @@ bool write_midi(const music::Music& m, music::MusicId root,
     trk.push_back(0xFF); trk.push_back(0x51); trk.push_back(0x03);
     trk.push_back(0x07); trk.push_back(0xA1); trk.push_back(0x20);
     // program change per instrument channel (all at t=0, before any note)
-    for (const std::pair<int, int>& pr : chans) {
-        const instrument::Info* info = instrument::by_id(pr.first);
-        if (!info) continue; // -1 / unknown: leave the channel's default voice
+    for (const Chan& cn : chans) {
+        const instrument::Info* info = instrument::by_id(cn.inst);
+        if (!info) continue; // bare / custom .sfz: leave the channel's default voice
         put_vlq(trk, 0);
-        trk.push_back(static_cast<std::uint8_t>(0xC0 | pr.second));
+        trk.push_back(static_cast<std::uint8_t>(0xC0 | cn.ch));
         trk.push_back(static_cast<std::uint8_t>(info->gm & 0x7F));
     }
     long long prev = 0;

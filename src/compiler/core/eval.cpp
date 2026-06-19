@@ -53,7 +53,7 @@ enum BuiltinId {
     B_ISNOTE, B_ISREST, B_ISSEQ, B_ISPAR,
     B_MLEFT, B_MRIGHT,
     B_TUPLET,
-    B_WITHINST,
+    B_WITHINST, B_SFZ,
 };
 
 struct BuiltinInfo { const char* name; int id; int arity; };
@@ -77,6 +77,7 @@ const BuiltinInfo kBuiltins[] = {
     {"leftChild", B_MLEFT, 1}, {"rightChild", B_MRIGHT, 1},
     {"tuplet", B_TUPLET, 3},
     {"withInstrument", B_WITHINST, 2},
+    {"sfz", B_SFZ, 1},
 };
 
 // Interval name -> (diatonic steps, semitones). Enough common ones to be useful.
@@ -297,15 +298,26 @@ Value call_builtin(Interp& I, int id, std::vector<Value>& a) {
             return music_value(I, music::scale_dur(*I.music, src, factor));
         }
         // ---- withInstrument: wrap a phrase in a Control node ----------------
+        // The Instrument value is a Con: a named-instrument constructor (its name is
+        // in the table) or a custom `sfz "<path>"` (any other string — a .sfz path).
         case B_WITHINST: {
-            int id = (a[0].kind == ValueKind::Con) ? instrument::id_of(a[0].str) : -1;
-            if (id < 0) {
+            if (a[0].kind != ValueKind::Con) {
                 I.errors.push_back("withInstrument expects an Instrument");
                 return a[1];
             }
+            const std::string& name = a[0].str;
+            int id = instrument::id_of(name);
             music::MusicId child = to_music(I, a[1]);
-            return music_value(I, music::control(*I.music, id, child));
+            if (id >= 0) return music_value(I, music::control(*I.music, id, child));
+            return music_value(I, music::control(*I.music, -1, name, child)); // custom .sfz
         }
+        // ---- sfz: lift a path string into a (custom) Instrument value -------
+        case B_SFZ:
+            if (a[0].kind != ValueKind::Str) {
+                I.errors.push_back("sfz expects a string path");
+                return v_unit();
+            }
+            return v_con(a[0].str, {});
     }
     I.errors.push_back("unknown builtin");
     return v_unit();

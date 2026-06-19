@@ -128,6 +128,10 @@ void run_typecheck_tests() {
     CHECK_EQ_STR(type_of("main = withInstrument Cello (c d e)", "main"), "Music");
     // a non-Instrument where one is expected is an error (Pitch vs Instrument)
     CHECK(has_type_error("main = withInstrument c' (c d e)"));
+    // sfz lifts a path string into a custom Instrument
+    CHECK_EQ_STR(type_of("main = sfz \"x.sfz\"", "main"), "Instrument");
+    CHECK_EQ_STR(type_of("main = withInstrument (sfz \"x.sfz\") (c d e)", "main"), "Music");
+    CHECK(has_type_error("main = sfz 5")); // Str expected, Int given
 
     // using a method at a type with NO instance is an error
     CHECK(has_type_error(std::string(desc) + "main = describe True"));

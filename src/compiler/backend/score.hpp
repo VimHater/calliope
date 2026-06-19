@@ -3,6 +3,7 @@
 #include "core/music.hpp"
 #include "core/rational.hpp"
 
+#include <string>
 #include <vector>
 
 // Score flattening — the shared timing seam between backends.
@@ -22,7 +23,8 @@ struct TimedNote {
     Rational start;
     int key = 0;
     Rational dur;
-    int instrument = -1; // instrument id from the enclosing Control, -1 if none
+    int instrument = -1;    // named-instrument id from the enclosing Control (-1 = none/custom)
+    std::string sfz_path;   // custom .sfz path from the enclosing Control ("" = named/none)
 };
 
 // Flatten the subtree rooted at `root` into absolute-timed notes (time-ordered by

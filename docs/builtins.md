@@ -103,6 +103,7 @@ predicates, and accessors let the prelude define structural transforms (`invert`
 | `parallel` | `Music -> Music -> Music` | layer two phrases (same as `:=:`) |
 | `tuplet` | `Int -> Int -> Music -> Music` | `tuplet n m` fits n notes in the time of m (scales every duration by m/n); a triplet is `tuplet 3 2` |
 | `withInstrument` | `Instrument -> Music -> Music` | wrap a phrase in a `Control` node assigning an instrument (stdlib `onInstrument` is a thin alias) |
+| `sfz` | `Str -> Instrument` | a custom instrument from a `.sfz` file path (relative to the source file, or absolute) |
 
 ### Instruments
 
@@ -118,6 +119,17 @@ Trumpet Trombone Horn Tuba  Flute Oboe Clarinet Bassoon            -- :: Instrum
 General-MIDI program (on its own channel) and the audio backend plays the matching
 Sonatina Symphonic Orchestra `.sfz` — or a placeholder GM SF2 if that patch is
 missing. Notes outside any `withInstrument` keep the default voice.
+
+For a soundfont not in the enum, `sfz` takes a file path:
+
+```
+onInstrument (sfz "instruments/my-cello.sfz") subject   -- a custom .sfz
+```
+
+A relative path resolves against the source `.cal` file's directory (so a project
+and its soundfonts travel together); an absolute path is used as-is. The audio
+backend plays it through sfizz; MIDI has no program mapping for a custom soundfont,
+so it stays on a plain channel (default voice).
 
 ### Predicates
 

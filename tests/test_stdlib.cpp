@@ -168,4 +168,14 @@ void run_stdlib_tests() {
         CHECK_EQ_STR(eval::show_value(v),
                      "inst(Cello, ((C3:1/4 :+: D3:1/4) :+: E3:1/4))");
     }
+
+    // a custom soundfont: sfz "<path>" is an Instrument; onInstrument carries it.
+    {
+        const std::string prog = "main = onInstrument (sfz \"cello.sfz\") (c d e)";
+        CHECK(!type_errors(prog));
+        CHECK_EQ_STR(type_of(prog, "main"), "Music");
+        eval::Value v = run(prog);
+        CHECK_EQ_STR(eval::show_value(v),
+                     "inst(\"cello.sfz\", ((C3:1/4 :+: D3:1/4) :+: E3:1/4))");
+    }
 }

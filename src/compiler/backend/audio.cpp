@@ -37,6 +37,16 @@ bool file_exists(const std::string& path) {
     return f.good();
 }
 
+bool is_absolute(const std::string& p) {
+    return !p.empty() && (p[0] == '/' || (p.size() > 1 && p[1] == ':')); // unix / win
+}
+
+// Resolve a (possibly relative) custom .sfz path against the source file's dir.
+std::string resolve(const std::string& base, const std::string& p) {
+    if (p.empty() || is_absolute(p) || base.empty()) return p;
+    return base + "/" + p;
+}
+
 // The SSO library root that instrument .sfz paths resolve against, and the bundled
 // fallback SF2 (both compile-time; empty if not configured).
 std::string sso_dir() {
@@ -141,17 +151,25 @@ std::vector<float> render_tsf(const std::string& sf2, int gm, const std::vector<
 }
 
 // Resolve + render one instrument group: sfizz if its .sfz exists, else the tsf
-// fallback. Empty result means the group was skipped (a warning is printed).
-std::vector<float> render_group(int inst, const std::vector<SampleEv>& evs, long long last_end,
+// fallback. `inst` is a named-instrument id (-1 = none/custom); a non-empty `path`
+// is a user `sfz "..."`. Empty result means the group was skipped (warning printed).
+std::vector<float> render_group(int inst, const std::string& path,
+                                const std::vector<SampleEv>& evs, long long last_end,
                                 const AudioOptions& opt) {
     std::string sfz;
     int gm = 0;
-    if (inst < 0) {
+    std::string label;
+    if (!path.empty()) {
+        sfz = resolve(opt.base_dir, path); // custom user soundfont
+        label = "\"" + path + "\"";
+    } else if (inst < 0) {
         sfz = opt.sfz_path; // un-instrumented notes: the --soundfont default voice
+        label = "(default)";
     } else if (const instrument::Info* info = instrument::by_id(inst)) {
         gm = info->gm;
         std::string dir = sso_dir();
         if (!dir.empty()) sfz = dir + info->sfz_rel;
+        label = info->name;
     }
 
     std::string err;
@@ -159,14 +177,14 @@ std::vector<float> render_group(int inst, const std::vector<SampleEv>& evs, long
         std::vector<float> buf = render_sfizz(sfz, evs, last_end, opt, err);
         if (!buf.empty()) return buf;
     }
+    // A custom .sfz has no GM mapping; fall back to program 0 if its file is missing.
     if (file_exists(fallback_sf2())) {
         std::vector<float> buf = render_tsf(fallback_sf2(), gm, evs, last_end, opt, err);
         if (!buf.empty()) return buf;
     }
 
-    const instrument::Info* info = instrument::by_id(inst);
     std::fprintf(stderr, "warning: no playable soundfont for instrument %s; skipped\n",
-                 info ? info->name : "(default)");
+                 label.c_str());
     return {};
 }
 
@@ -176,16 +194,23 @@ bool write_wav(const music::Music& m, music::MusicId root,
                const AudioOptions& opt, const std::string& path, std::string& err) {
     std::vector<TimedNote> notes = flatten(m, root);
 
-    // Group notes by instrument, render each on its own synth, and mix (sum) the
-    // groups into one master buffer. std::map keeps a stable, deterministic order.
-    std::map<int, std::vector<TimedNote>> groups;
-    for (const TimedNote& n : notes) groups[n.instrument].push_back(n);
+    // Group notes by instrument (named id or custom .sfz path), render each on its
+    // own synth, and mix (sum) the groups into one master buffer. The map key keeps
+    // distinct custom soundfonts (all instrument == -1) apart; std::map gives a
+    // stable, deterministic order.
+    std::map<std::string, std::vector<TimedNote>> groups;
+    for (const TimedNote& n : notes) {
+        std::string key = n.sfz_path.empty() ? ("#" + std::to_string(n.instrument))
+                                             : ("@" + n.sfz_path);
+        groups[key].push_back(n);
+    }
 
     std::vector<float> master; // interleaved stereo f32
-    for (const std::pair<const int, std::vector<TimedNote>>& g : groups) {
+    for (const std::pair<const std::string, std::vector<TimedNote>>& g : groups) {
+        const TimedNote& rep = g.second.front(); // all share instrument + sfz_path
         long long last_end = 0;
         std::vector<SampleEv> evs = events_of(g.second, opt, last_end);
-        std::vector<float> buf = render_group(g.first, evs, last_end, opt);
+        std::vector<float> buf = render_group(rep.instrument, rep.sfz_path, evs, last_end, opt);
         if (buf.size() > master.size()) master.resize(buf.size(), 0.0f);
         for (std::size_t i = 0; i < buf.size(); ++i) master[i] += buf[i];
     }

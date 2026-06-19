@@ -134,7 +134,7 @@ const music::Music* as_music(const driver::Compilation& c, music::Music& storage
 } // namespace
 
 int emit_output(const driver::Compilation& c, Emit emit, const std::string& out_path,
-                const std::string& soundfont) {
+                const std::string& soundfont, const std::string& base_dir) {
     const int status = driver::ok(c) ? 0 : 1;
 
     if (emit == Emit::Ir) {
@@ -185,6 +185,7 @@ int emit_output(const driver::Compilation& c, Emit emit, const std::string& out_
         }
         backend::AudioOptions opt;
         opt.sfz_path = soundfont;
+        opt.base_dir = base_dir;
         std::string err;
         if (!backend::write_wav(*mp, root, opt, out_path, err)) {
             std::fprintf(stderr, "error: %s\n", err.c_str());
@@ -194,6 +195,7 @@ int emit_output(const driver::Compilation& c, Emit emit, const std::string& out_
         return status;
 #else
         (void)soundfont;
+        (void)base_dir;
         std::fprintf(stderr, "error: audio backend not built in this binary\n");
         return 1;
 #endif

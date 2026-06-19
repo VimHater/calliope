@@ -134,8 +134,9 @@ in (loaded units never shift the program's lines).
   — constructors `note` / `noteWith` / `sequence` / `parallel`, predicates `isNote` /
   `isRest` / `isSeq` / `isPar`, accessors `leftChild` / `rightChild` /
   `notePitch` / `noteDur`, `tuplet` (scales durations by m/n via
-  `music::scale_dur`), and `withInstrument` (wraps a phrase in a `Control` node —
-  `music::control`; the stdlib's `onInstrument` is a thin wrapper). Notation carries durations on notes (`c'8`), rests (`r2`),
+  `music::scale_dur`), `withInstrument` (wraps a phrase in a `Control` node —
+  `music::control`; the stdlib's `onInstrument` is a thin wrapper), and `sfz`
+  (`Str -> Instrument`, a custom-soundfont instrument from a `.sfz` path). Notation carries durations on notes (`c'8`), rests (`r2`),
   and chords — a duration after `>` applies to every note (`<c e g>2`, via the
   parser encoding it in the `Chord` node's `extra`, applied by `music::set_dur`);
   the tie operator `~` (`Phrase t => Phrase u => t
@@ -168,9 +169,13 @@ will follow): it wraps a sub-phrase with an **instrument**. `Instrument` is a ty
 enum of builtin nullary constructors (`Cello`, `Flute`, … like the `Interval`
 constructors — `core/instrument.{hpp,cpp}` is the single name↔GM↔.sfz table); the
 stdlib `onInstrument :: Instrument -> Music -> Music` (over the `withInstrument`
-axiom) builds the node. The IR carries only the abstract enum id; each backend
-resolves it (MIDI → GM program + a channel per instrument; audio → an SSO `.sfz`,
-or a placeholder GM SF2 via tsf when that patch is absent). `:+:`/`:=:` compose via a builtin single-parameter
+axiom) builds the node. A **custom soundfont** is `sfz :: Str -> Instrument` —
+`onInstrument (sfz "cello.sfz") phrase` — so the Control node carries *either* an
+enum id *or* a user `.sfz` path (relative paths resolve against the source file's
+dir; absolute used as-is). The IR carries only that abstract payload; each backend
+resolves it (MIDI → GM program + a channel per instrument, custom paths get a plain
+channel; audio → an SSO `.sfz`, the user's `.sfz`, or a placeholder GM SF2 via tsf
+when a patch is absent). `:+:`/`:=:` compose via a builtin single-parameter
 class **`Phrase`** (instances `Pitch` and `Music`): `(:+:) :: Phrase t => Phrase u
 => t -> u -> Music`. A bare `Pitch` operand lifts to a one-note phrase, so `c' :+:
 d'` is `Music`, and a function over `:+:` stays polymorphic (`fn x = x :+: x` has

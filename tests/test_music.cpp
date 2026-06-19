@@ -50,4 +50,11 @@ void run_music_tests() {
     CHECK(music::equal(m, voiced, music::control(m, viola, music::seq(m, c4, e4))));
     CHECK(!music::equal(m, voiced, music::control(m, instrument::id_of("Cello"),
                                                   music::seq(m, c4, e4))));
+
+    // a custom .sfz Control (instrument -1, path set) shows the quoted path;
+    // equality distinguishes the path.
+    music::MusicId custom = music::control(m, -1, "harp.sfz", c4);
+    CHECK_EQ_STR(music::show(m, custom), "inst(\"harp.sfz\", C4:1/4)");
+    CHECK(music::equal(m, custom, music::control(m, -1, "harp.sfz", c4)));
+    CHECK(!music::equal(m, custom, music::control(m, -1, "flute.sfz", c4)));
 }

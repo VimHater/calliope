@@ -128,5 +128,5 @@ int main(int argc, char** argv) {
     const bool is_audio = emit == Emit::Wav || emit == Emit::Mp3 || emit == Emit::Mp4;
     if (soundfont.empty() && is_audio) soundfont = calliope::cli::default_soundfont();
 
-    return calliope::cli::emit_output(c, emit, out_path, soundfont);
+    return calliope::cli::emit_output(c, emit, out_path, soundfont, base);
 }

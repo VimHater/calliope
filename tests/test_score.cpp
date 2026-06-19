@@ -73,4 +73,16 @@ void run_score_tests() {
         CHECK(ns[0].instrument == cello && ns[1].instrument == cello); // inner wins
         CHECK(ns[2].instrument == -1);                                 // bare note
     }
+
+    // A custom-.sfz Control (instrument -1, path set) stamps the path onto its notes.
+    {
+        music::Music m;
+        music::MusicId a = music::control(m, -1, "a.sfz", music::note(m, pitch(0, 0, 4), q));
+        music::MusicId b = music::control(m, -1, "b.sfz", music::note(m, pitch(1, 0, 4), q));
+        std::vector<backend::TimedNote> ns = backend::flatten(m, music::seq(m, a, b));
+        CHECK(ns.size() == 2);
+        CHECK(ns[0].instrument == -1 && ns[1].instrument == -1);
+        CHECK_EQ_STR(ns[0].sfz_path.c_str(), "a.sfz"); // distinct custom voices kept apart
+        CHECK_EQ_STR(ns[1].sfz_path.c_str(), "b.sfz");
+    }
 }

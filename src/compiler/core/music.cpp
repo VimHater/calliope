@@ -2,6 +2,8 @@
 
 #include "instrument.hpp"
 
+#include <utility>
+
 namespace calliope::music {
 
 MusicId add(Music& m, MusicNode n) {
@@ -40,12 +42,17 @@ MusicId par(Music& m, MusicId a, MusicId b) {
     return add(m, n);
 }
 
-MusicId control(Music& m, int instrument, MusicId child) {
+MusicId control(Music& m, int instrument, std::string sfz_path, MusicId child) {
     MusicNode n;
     n.kind = MusicKind::Control;
     n.instrument = instrument;
+    n.sfz_path = std::move(sfz_path);
     n.left = child;
     return add(m, n);
+}
+
+MusicId control(Music& m, int instrument, MusicId child) {
+    return control(m, instrument, std::string(), child);
 }
 
 MusicId transpose(Music& m, MusicId id, int dstep, int dsemi) {
@@ -71,7 +78,7 @@ MusicId transpose(Music& m, MusicId id, int dstep, int dsemi) {
             return par(m, a, b);
         }
         case MusicKind::Control:
-            return control(m, n.instrument, transpose(m, n.left, dstep, dsemi));
+            return control(m, n.instrument, n.sfz_path, transpose(m, n.left, dstep, dsemi));
     }
     return NoMusic;
 }
@@ -93,7 +100,7 @@ MusicId scale_dur(Music& m, MusicId id, Rational factor) {
             return par(m, a, b);
         }
         case MusicKind::Control:
-            return control(m, n.instrument, scale_dur(m, n.left, factor));
+            return control(m, n.instrument, n.sfz_path, scale_dur(m, n.left, factor));
     }
     return NoMusic;
 }
@@ -114,7 +121,8 @@ bool equal(const Music& m, MusicId a, MusicId b) {
         case MusicKind::Par:
             return equal(m, na.left, nb.left) && equal(m, na.right, nb.right);
         case MusicKind::Control:
-            return na.instrument == nb.instrument && equal(m, na.left, nb.left);
+            return na.instrument == nb.instrument && na.sfz_path == nb.sfz_path &&
+                   equal(m, na.left, nb.left);
     }
     return false;
 }
@@ -163,8 +171,11 @@ MusicId tie(Music& m, MusicId a, MusicId b, bool& ok) {
             return par(m, l, r);
         }
         case MusicKind::Control:
-            if (na.instrument != nb.instrument) { ok = false; return NoMusic; }
-            return control(m, na.instrument, tie(m, na.left, nb.left, ok));
+            if (na.instrument != nb.instrument || na.sfz_path != nb.sfz_path) {
+                ok = false;
+                return NoMusic;
+            }
+            return control(m, na.instrument, na.sfz_path, tie(m, na.left, nb.left, ok));
     }
     ok = false;
     return NoMusic;
@@ -194,8 +205,11 @@ std::string show(const Music& m, MusicId id) {
         case MusicKind::Par:
             return "(" + show(m, n.left) + " :=: " + show(m, n.right) + ")";
         case MusicKind::Control: {
-            const instrument::Info* info = instrument::by_id(n.instrument);
-            std::string name = info ? info->name : "?";
+            std::string name;
+            if (!n.sfz_path.empty()) name = "\"" + n.sfz_path + "\"";
+            else if (const instrument::Info* info = instrument::by_id(n.instrument))
+                name = info->name;
+            else name = "?";
             return "inst(" + name + ", " + show(m, n.left) + ")";
         }
     }

@@ -583,6 +583,8 @@ void seed_builtins(Checker& ck, Env& env) {
     // withInstrument inst music — assign an instrument to a phrase (Control node).
     add_mono("withInstrument", t_arrow(c, t_con0(c, "Instrument"),
                                        t_arrow(c, t_con0(c, "Music"), t_con0(c, "Music"))));
+    // sfz "path" — lift a .sfz file path into a custom Instrument value.
+    add_mono("sfz", t_arrow(c, t_con0(c, "Str"), t_con0(c, "Instrument")));
     // `~` ties two matching phrases (notes, chords, …) into summed durations.
     // Like `:+:`, each operand is an independently-constrained Phrase; a bare
     // Pitch lifts, and the Music result lets ties chain.

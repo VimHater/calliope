@@ -21,9 +21,10 @@
 //
 // `Control` is the first member of the `Modify` family (spec §8); tempo / dynamics
 // / key controls will join it. It wraps a single child (in `left`) and carries the
-// control payload — for now an `instrument` id (into the instrument table). The id
-// stays abstract here; each backend resolves it. Durations are exact `Rational`
-// whole-note fractions (quarter = 1/4), per spec O11.
+// control payload: either a named-instrument `instrument` id (into the instrument
+// table) or, for a user-supplied SFZ, a `sfz_path` (then `instrument` is -1). The
+// payload stays abstract here; each backend resolves it. Durations are exact
+// `Rational` whole-note fractions (quarter = 1/4), per spec O11.
 
 namespace calliope::music {
 
@@ -38,7 +39,8 @@ struct MusicNode {
     Rational dur;                // Note, Rest
     MusicId left = NoMusic;      // Seq / Par / Control (child)
     MusicId right = NoMusic;     // Seq / Par
-    int instrument = -1;         // Control: instrument id (-1 = none)
+    int instrument = -1;         // Control: named-instrument id (-1 = none / custom)
+    std::string sfz_path;        // Control: user-supplied .sfz path ("" = named/none)
 };
 
 struct Music {
@@ -50,7 +52,8 @@ MusicId note(Music& m, Pitch p, Rational dur);
 MusicId rest(Music& m, Rational dur);
 MusicId seq(Music& m, MusicId a, MusicId b);
 MusicId par(Music& m, MusicId a, MusicId b);
-MusicId control(Music& m, int instrument, MusicId child);
+MusicId control(Music& m, int instrument, std::string sfz_path, MusicId child);
+MusicId control(Music& m, int instrument, MusicId child); // sfz_path = "" (named)
 
 // Transpose every Note in the subtree by (diatonic steps, semitones); Rests and
 // structure are preserved. Returns a fresh subtree (input is left untouched).

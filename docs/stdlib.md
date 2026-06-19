@@ -79,7 +79,12 @@ par (onInstrument Cello bass) (onInstrument Flute melody)   -- two voices, two i
 `Instrument` is a typed enum (`Piano`, `Violin`, `Viola`, `Cello`, `Contrabass`,
 `Strings`, `Trumpet`, `Trombone`, `Horn`, `Tuba`, `Flute`, `Oboe`, `Clarinet`,
 `Bassoon`, `Harp`, `Harpsichord`). The MIDI/audio backends sound each tagged phrase
-on its instrument; un-tagged notes use the default voice.
+on its instrument; un-tagged notes use the default voice. For a soundfont outside
+the enum, `sfz "path/to.sfz"` is also an `Instrument` (see `docs/builtins.md`):
+
+```
+onInstrument (sfz "sounds/my-cello.sfz") subject
+```
 
 ## A worked example
 
