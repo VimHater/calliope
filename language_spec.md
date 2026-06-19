@@ -385,10 +385,19 @@ triplet :: Music -> Music                 -- = tuplet 3 2  (prelude)
 (~)     :: Phrase t => Phrase u => t -> u -> Music  -- c'4 ~ c'8 = C4 held 3/8
 ```
 
-> **As implemented:** rests carry durations (`r2`, `r4.`), as do chord notes
-> (`<c'2 e'2 g'2>`). `~` ties notes, chords (`<c e g> ~ <c e g>` is a held
+> **As implemented:** rests carry durations (`r2`, `r4.`), and a chord takes a
+> duration after `>` that applies to all its notes (`<c e g>2`, `<c e g>4.`; a
+> per-note form `<c'2 e'2>` also works, overridden by a chord-level one). `~` ties
+> notes, chords (`<c e g> ~ <c e g>` is a held
 > chord), and chains (`c'4 ~ c'8 ~ c'8`); the two sides must have the same
 > pitches and shape, else it is a runtime error.
+>
+> Comparison is implemented now (ahead of the prelude `Eq`/`Ord` of §16):
+> `==`/`/=` are polymorphic structural equality (on `Pitch`, spelled, and `Music`,
+> deep), and `< > <= >=` form a builtin class `Ord` with instances `Int` and
+> `Pitch` (pitches order by height, so `c' < d'`; `Music` has no order). A `<`
+> opens a chord only when it hugs its first note (`<c e g>`); a spaced `<` is the
+> comparison operator (`a < b`).
 
 So `motif1 :+: motif2` and ``motif1 `andThen` motif2`` are the same;
 `upper :=: lower` and ``upper `par` lower`` are the same.

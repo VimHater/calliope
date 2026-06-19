@@ -106,7 +106,9 @@ in (loaded units never shift the program's lines).
   `isRest` / `isSeq` / `isPar`, accessors `leftChild` / `rightChild` /
   `notePitch` / `noteDur`, and `tuplet` (scales durations by m/n via
   `music::scale_dur`). Notation carries durations on notes (`c'8`), rests (`r2`),
-  and chord notes (`<c'2 e'2>`); the tie operator `~` (`Phrase t => Phrase u => t
+  and chords — a duration after `>` applies to every note (`<c e g>2`, via the
+  parser encoding it in the `Chord` node's `extra`, applied by `music::set_dur`);
+  the tie operator `~` (`Phrase t => Phrase u => t
   -> u -> Music`, via `music::tie`) joins two matching phrases — notes, chords
   (`<c e g> ~ <c e g>`), and chains — summing durations; mismatched pitch/shape is
   a runtime error.
@@ -139,6 +141,14 @@ type `Phrase t => t -> Music`); `1 :+: 2` is rejected (`no instance for Phrase
 Int`). Adjacency (`c d e`, a `Seq`) is still the idiomatic spelling. `:*:`
 repeats a phrase: `phrase :*: n :: Phrase t => t -> Int -> Music` (n copies in a
 row, `n >= 1`; binds tighter than `:+:`).
+
+**Comparison.** `==`/`/=` are polymorphic structural equality — on `Pitch`
+(spelled: `fis' /= ges'`) and `Music` (deep, via `music::equal`: same shape,
+pitches, durations). Ordering `< > <= >=` is a builtin class **`Ord`** (instances
+`Int` and `Pitch`; pitches by height/semitones, so `c' < d'`), no `Music`
+instance. **A `<` opens a chord only when it hugs its first note** (`<c e g>`); a
+spaced `<` is comparison (`a < b`), resolving the reserved-letter ambiguity at
+parse time (`parse::opens_chord`).
 
 Not yet built: octave-resolution pass (absolute works inline; `#relative` needs
 it), the score IR + backends, more prelude (intervals as a monoid, scales/keys,

@@ -94,5 +94,6 @@ input is not implemented, so each definition must fit on one line.)
 ### Examples
 
 Runnable programs live in [`../examples/`](../examples): `hello.cal`,
-`reverse-notes.cal`, `transforms.cal`, `arpeggio-and-chord.cal`, and the headline
-`development.cal`.
+`reverse-notes.cal`, `transforms.cal`, `arpeggio-and-chord.cal`, the headline
+`development.cal`, and the boolean/comparison tours `not-operator.cal` and
+`comparing-music.cal`.

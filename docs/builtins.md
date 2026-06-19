@@ -9,8 +9,8 @@ including all music theory — is written in Calliope in the
 | Operator | Type | Notes |
 |----------|------|-------|
 | `+` `-` `*` `/` | `Int -> Int -> Int` | `/` is integer division; divide by zero is an error |
-| `==` `/=` | `a -> a -> Bool` | structural equality (works on `Int`, `Bool`, `Pitch`) |
-| `<` `>` `<=` `>=` | `Int -> Int -> Bool` | ordering on integers |
+| `==` `/=` | `a -> a -> Bool` | structural equality: `Int`, `Bool`, `Pitch` (spelled: `fis' /= ges'`), and `Music` (deep: same shape, pitches, durations) |
+| `<` `>` `<=` `>=` | `Ord t => t -> t -> Bool` | ordering on `Int` and `Pitch` (pitches by height / semitones, so `fis' <= ges'`); no instance for `Music` |
 | `and` `or` | `Bool -> Bool -> Bool` | keyword operators, **short-circuit** |
 | `^+` `^-` | `Transposable t => t -> Interval -> t` | transpose; class method (see below) |
 | `:` | `a -> [a] -> [a]` | list cons (`x : xs`) |

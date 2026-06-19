@@ -501,9 +501,21 @@ void seed_builtins(Checker& ck, Env& env) {
     add_mono("-", iii());
     add_mono("*", iii());
     add_mono("/", iii());
-    // comparisons: Int -> Int -> Bool
-    for (const char* op : {"<", ">", "<=", ">="})
-        add_mono(op, t_arrow(c, t_con0(c, "Int"), t_arrow(c, t_con0(c, "Int"), t_con0(c, "Bool"))));
+    // ordering is a builtin single-parameter class Ord (instances Int and Pitch;
+    // pitches order by height / semitones). Music has no order — comparing two
+    // phrases with `<` is a `no instance for Ord Music` error.
+    //   (<), (>), (<=), (>=) :: Ord t => t -> t -> Bool
+    for (const char* op : {"<", ">", "<=", ">="}) {
+        TypeId a = new_var(c); int av = c.pool[a].var;
+        Scheme s;
+        s.vars.push_back(av);
+        s.type = t_arrow(c, a, t_arrow(c, a, t_con0(c, "Bool")));
+        s.constraints.emplace_back("Ord", av);
+        env.push_back({op, s});
+    }
+    ck.classes.push_back({"Ord", "a", {"<", ">", "<=", ">="}});
+    ck.instances.emplace_back("Ord", "Int");
+    ck.instances.emplace_back("Ord", "Pitch");
     // equality: forall a. a -> a -> Bool
     {
         TypeId a = new_var(c);

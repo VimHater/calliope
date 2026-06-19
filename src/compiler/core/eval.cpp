@@ -122,6 +122,22 @@ bool music_node(const Value& v, music::MusicNode& out) {
 music::MusicId to_music(Interp& I, const Value& v);
 Value v_pitch_dur(Pitch p, Rational dur);
 
+// Structural equality for `==` / `/=`. Same kind throughout (the type checker
+// rules out mixing): pitches by spelling, Music deeply, lists element-wise.
+bool values_equal(Interp& I, const Value& x, const Value& y) {
+    if (x.kind != y.kind) return false;
+    switch (x.kind) {
+        case ValueKind::Pitch: return pitch_eq(x.pitch, y.pitch);
+        case ValueKind::Music: return music::equal(*I.music, x.mroot, y.mroot);
+        case ValueKind::List:
+            if (x.items.size() != y.items.size()) return false;
+            for (std::size_t k = 0; k < x.items.size(); k++)
+                if (!values_equal(I, x.items[k], y.items[k])) return false;
+            return true;
+        default: return x.i == y.i; // Int, Bool
+    }
+}
+
 Value call_builtin(Interp& I, int id, std::vector<Value>& a) {
     switch (id) {
         case B_ADD: return v_int(a[0].i + a[1].i);
@@ -131,17 +147,19 @@ Value call_builtin(Interp& I, int id, std::vector<Value>& a) {
             if (a[1].i == 0) { I.errors.push_back("division by zero"); return v_unit(); }
             return v_int(a[0].i / a[1].i);
         case B_EQ: case B_NE: {
-            bool eq;
-            if (a[0].kind == ValueKind::Pitch && a[1].kind == ValueKind::Pitch)
-                eq = pitch_eq(a[0].pitch, a[1].pitch);
-            else
-                eq = a[0].i == a[1].i;
+            bool eq = values_equal(I, a[0], a[1]);
             return v_bool(id == B_EQ ? eq : !eq);
         }
-        case B_LT: return v_bool(a[0].i <  a[1].i);
-        case B_GT: return v_bool(a[0].i >  a[1].i);
-        case B_LE: return v_bool(a[0].i <= a[1].i);
-        case B_GE: return v_bool(a[0].i >= a[1].i);
+        case B_LT: case B_GT: case B_LE: case B_GE: {
+            // ordering: pitches compare by height (semitones), ints by value.
+            long long l = (a[0].kind == ValueKind::Pitch) ? semitones(a[0].pitch) : a[0].i;
+            long long r = (a[1].kind == ValueKind::Pitch) ? semitones(a[1].pitch) : a[1].i;
+            bool res = id == B_LT ? l <  r
+                     : id == B_GT ? l >  r
+                     : id == B_LE ? l <= r
+                                  : l >= r;
+            return v_bool(res);
+        }
         case B_NOT: return v_bool(a[0].i == 0);
         case B_TRANSPOSE_UP:
         case B_TRANSPOSE_DOWN: {
@@ -504,6 +522,14 @@ Value eval(Interp& I, NodeId id, const std::shared_ptr<Env>& env) {
             for (NodeId k : n.kids) {
                 music::MusicId m = to_music(I, eval(I, k, env));
                 acc = (acc == music::NoMusic) ? m : music::par(*I.music, acc, m);
+            }
+            // chord-level duration `<c e g>4.` (encoded in `extra`) overrides every
+            // note's duration: base = extra/4, dots = extra%4.
+            if (n.extra != 0) {
+                Rational d = rational(1, n.extra / 4);
+                Rational add = d;
+                for (int k = 0; k < n.extra % 4; k++) { add = rat_div(add, rational(2, 1)); d = rat_add(d, add); }
+                acc = music::set_dur(*I.music, acc, d);
             }
             return music_value(I, acc);
         }

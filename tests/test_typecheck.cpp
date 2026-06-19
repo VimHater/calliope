@@ -70,6 +70,14 @@ void run_typecheck_tests() {
     CHECK_EQ_STR(type_of("main = c'4 ~ c'8 ~ c'8", "main"), "Music");  // chains
     CHECK(has_type_error("main = 1 ~ 2"));             // no instance for Phrase Int
 
+    // comparison: ordering is `Ord t => t -> t -> Bool` (Int, Pitch); `==` is
+    // polymorphic and works on Pitch and Music. `a < b` is a comparison, not a
+    // chord — the chord `<` must hug its first note.
+    CHECK_EQ_STR(type_of("main = c' < d'", "main"), "Bool");
+    CHECK_EQ_STR(type_of("main = a < b", "main"), "Bool");          // ambiguity fixed
+    CHECK_EQ_STR(type_of("main = (c d e) == (c d e)", "main"), "Bool");
+    CHECK(has_type_error("main = (c d e) < (d e f)"));  // no instance for Ord Music
+
     // lists
     CHECK_EQ_STR(type_of("main = [1, 2, 3]", "main"), "[Int]");
 

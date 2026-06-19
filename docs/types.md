@@ -110,9 +110,13 @@ c' ^+ P5            -- Pitch
 transpose           -- :: Transposable t0 => Interval -> t0 -> t0
 ```
 
-The other builtin class is **`Phrase`** — the things `:+:` / `:=:` compose
-(instances `Pitch` and `Music`), which is why a bare pitch can sit beside a phrase
-(`c' :+: (d e)`) and why `fn x = x :+: x` is `Phrase t0 => t0 -> Music`.
+The other builtin classes are **`Phrase`** — the things `:+:` / `:=:` / `~`
+compose (instances `Pitch` and `Music`), which is why a bare pitch can sit beside
+a phrase (`c' :+: (d e)`) and why `fn x = x :+: x` is `Phrase t0 => t0 -> Music` —
+and **`Ord`** — the things you can order with `< > <= >=` (instances `Int` and
+`Pitch`; pitches order by height, so `c' < d'`). `Music` is not `Ord`, so
+`(c d e) < (d e f)` is a `no instance for Ord Music` error. (`==` / `/=` are not a
+class — they work on any type, structurally.)
 
 Using a method at a type with **no instance** is a type error. You can declare
 your own classes and instances:

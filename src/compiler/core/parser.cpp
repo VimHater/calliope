@@ -125,8 +125,25 @@ bool starts_primary(TokenKind k) {
     }
 }
 
-bool starts_pitchish(TokenKind k) {
-    return k == TokenKind::Pitch || k == TokenKind::Rest || k == TokenKind::Less;
+// A `<` opens a chord only when it hugs its first note (no space): `<c e g>`.
+// A spaced `<` (`a < b`) is the comparison operator, not a chord. This is how we
+// disambiguate the two uses of `<` without scope/type lookup.
+bool opens_chord(Parser& p) {
+    const Token& lt = cur(p);
+    if (lt.kind != TokenKind::Less) return false;
+    const Token& nx = peek_at(p, 1);
+    bool adjacent = (nx.line == lt.line && nx.col == lt.col + 1);
+    return adjacent && (nx.kind == TokenKind::Pitch || nx.kind == TokenKind::Rest ||
+                        nx.kind == TokenKind::Less);
+}
+
+// Does the current token continue a run of adjacent notes? A `<` only does so
+// when it actually opens a chord (so `a < b` ends the run and `<` becomes infix).
+bool continues_pitch_run(Parser& p) {
+    TokenKind k = cur(p).kind;
+    if (k == TokenKind::Pitch || k == TokenKind::Rest) return true;
+    if (k == TokenKind::Less) return opens_chord(p);
+    return false;
 }
 
 bool can_start_arg(Parser& p) {
@@ -183,8 +200,32 @@ NodeId parse_chord(Parser& p) {
         }
         n.kids.push_back(parse_primary(p));
     }
+    Token close = cur(p);
     if (cur(p).kind == TokenKind::Greater) advance(p);
     else error(p, "expected '>' to close chord");
+
+    // optional chord-level duration immediately after '>' (no space): <c e g>4.
+    // applies to every note in the chord. Encoded in `extra` as base*4 + dots
+    // (0 = none): decoded back to a Rational by the evaluator.
+    if (cur(p).kind == TokenKind::Int &&
+        cur(p).line == close.line && cur(p).col == close.col + 1) {
+        const Token& numtok = cur(p);
+        long long base = 0;
+        for (char ch : numtok.text) base = base * 10 + (ch - '0');
+        int nextcol = numtok.col + static_cast<int>(numtok.text.size());
+        int line = numtok.line;
+        advance(p);
+        int dots = 0;
+        // following dot-operator tokens ("." / ".."), still adjacent
+        while (cur(p).kind == TokenKind::Operator &&
+               cur(p).text.find_first_not_of('.') == std::string_view::npos &&
+               cur(p).line == line && cur(p).col == nextcol) {
+            dots += static_cast<int>(cur(p).text.size());
+            nextcol += static_cast<int>(cur(p).text.size());
+            advance(p);
+        }
+        if (base >= 1) n.extra = static_cast<int>(base * 4 + (dots > 3 ? 3 : dots));
+    }
     return ast_add(p.ast, n);
 }
 
@@ -397,7 +438,7 @@ NodeId parse_app(Parser& p) {
     if (pitchish) {
         std::vector<NodeId> run;
         run.push_back(first);
-        while (starts_pitchish(cur(p).kind)) run.push_back(parse_primary(p));
+        while (continues_pitch_run(p)) run.push_back(parse_primary(p));
         if (run.size() == 1) return first;
         Node n;
         n.kind = NodeKind::Seq;

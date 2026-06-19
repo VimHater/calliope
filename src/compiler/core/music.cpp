@@ -84,6 +84,45 @@ MusicId scale_dur(Music& m, MusicId id, Rational factor) {
     return NoMusic;
 }
 
+bool equal(const Music& m, MusicId a, MusicId b) {
+    if (a == b) return true;
+    if (a == NoMusic || b == NoMusic) return false;
+    const MusicNode& na = m.nodes[a];
+    const MusicNode& nb = m.nodes[b];
+    if (na.kind != nb.kind) return false;
+    switch (na.kind) {
+        case MusicKind::Note:
+            return pitch_eq(na.pitch, nb.pitch) &&
+                   na.dur.num == nb.dur.num && na.dur.den == nb.dur.den;
+        case MusicKind::Rest:
+            return na.dur.num == nb.dur.num && na.dur.den == nb.dur.den;
+        case MusicKind::Seq:
+        case MusicKind::Par:
+            return equal(m, na.left, nb.left) && equal(m, na.right, nb.right);
+    }
+    return false;
+}
+
+MusicId set_dur(Music& m, MusicId id, Rational dur) {
+    if (id == NoMusic) return NoMusic;
+    MusicNode n = m.nodes[id]; // copy: add() may reallocate the pool mid-recursion
+    switch (n.kind) {
+        case MusicKind::Note: return note(m, n.pitch, dur);
+        case MusicKind::Rest: return rest(m, dur);
+        case MusicKind::Seq: {
+            MusicId a = set_dur(m, n.left, dur);
+            MusicId b = set_dur(m, n.right, dur);
+            return seq(m, a, b);
+        }
+        case MusicKind::Par: {
+            MusicId a = set_dur(m, n.left, dur);
+            MusicId b = set_dur(m, n.right, dur);
+            return par(m, a, b);
+        }
+    }
+    return NoMusic;
+}
+
 MusicId tie(Music& m, MusicId a, MusicId b, bool& ok) {
     if (a == NoMusic || b == NoMusic) { ok = false; return NoMusic; }
     MusicNode na = m.nodes[a]; // copy: add() may reallocate the pool mid-recursion

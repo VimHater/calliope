@@ -123,6 +123,11 @@ void run_eval_tests() {
     // a chord sounds in parallel
     CHECK_EQ_STR(eval::show_value(run_main("<c' e' g'>")),
                  "((C4:1/4 :=: E4:1/4) :=: G4:1/4)");
+    // a chord-level duration sets every note's duration: <c e g>2 = half, >4. = dotted
+    CHECK_EQ_STR(eval::show_value(run_main("<c' e' g'>2")),
+                 "((C4:1/2 :=: E4:1/2) :=: G4:1/2)");
+    CHECK_EQ_STR(eval::show_value(run_main("<c' e' g'>4.")),
+                 "((C4:3/8 :=: E4:3/8) :=: G4:3/8)");
     // a bare rest is Music
     CHECK_EQ_STR(eval::show_value(run_main("r")), "r:1/4");
     // transposing a whole phrase via the builtin Transposable Music instance
@@ -147,6 +152,16 @@ void run_eval_tests() {
     // a tied chord: matching chords merge, each note's duration summed
     CHECK_EQ_STR(eval::show_value(run_main("<c' e' g'> ~ <c' e' g'>")),
                  "((C4:1/2 :=: E4:1/2) :=: G4:1/2)");
+
+    // ---- comparison: pitch ordering (by height) + deep Music/== --------
+    CHECK_EQ_STR(eval::show_value(run_main("c' < d'")), "True");   // C4 below D4
+    CHECK_EQ_STR(eval::show_value(run_main("e' > c'")), "True");
+    CHECK_EQ_STR(eval::show_value(run_main("a < b")),   "True");   // not a chord
+    CHECK_EQ_STR(eval::show_value(run_main("fis' == ges'")), "False"); // spelled: F# != Gb
+    CHECK_EQ_STR(eval::show_value(run_main("fis' <= ges'")), "True");  // same height
+    CHECK_EQ_STR(eval::show_value(run_main("<c' e' g'> == <c' e' g'>")), "True");
+    CHECK_EQ_STR(eval::show_value(run_main("(c d e) == (c d e)")), "True");
+    CHECK_EQ_STR(eval::show_value(run_main("(c d e) == (c d f)")), "False");
 
     // ---- pipe, cons, case ------------------------------------------------
     // pipe: x |> f = f x (left-associative, so it chains)

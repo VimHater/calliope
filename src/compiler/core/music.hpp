@@ -56,6 +56,14 @@ MusicId transpose(Music& m, MusicId id, int dstep, int dsemi);
 // a fresh subtree.
 MusicId scale_dur(Music& m, MusicId id, Rational factor);
 
+// Deep structural equality of two subtrees: same shape, same spelled pitches
+// (C# != Db), same durations. Used by `==` / `/=` on Music values.
+bool equal(const Music& m, MusicId a, MusicId b);
+
+// Set every Note/Rest duration in the subtree to `dur` (structure and pitch
+// preserved). Used by chord-level durations (`<c e g>2`). Returns a fresh subtree.
+MusicId set_dur(Music& m, MusicId id, Rational dur);
+
 // Tie two subtrees: they must have identical shape and pitch (a note tied to the
 // same note, a chord to the same chord, …); the result keeps that shape with each
 // Note/Rest duration summed. Sets ok=false (and returns NoMusic) on any mismatch.

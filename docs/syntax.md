@@ -50,8 +50,10 @@ g'8.      -- G4, dotted eighth
 - A **single pitch literal evaluates to a `Pitch`** value (`c'` :: `Pitch`).
 - **Adjacent** pitch literals **sequence** into `Music`: `c d e` builds a `Seq`
   (it is sugar for `c :+: d :+: e`). Each pitch is lifted to a note.
-- A **chord** `<c' e' g'>` sounds its notes together (a `Par`). Each note keeps
-  its own duration, so `<c'2 e'2 g'2>` is a half-note triad.
+- A **chord** `<c' e' g'>` sounds its notes together (a `Par`). A duration written
+  right after `>` applies to the whole chord: `<c' e' g'>2` is a half-note triad,
+  `<c' e' g'>4.` a dotted-quarter triad. (You may instead give each note its own
+  duration inside, `<c'2 e'2 g'2>`; a chord-level duration overrides all of them.)
 - A **rest** is `r` (or `R`, or the spacer `s`); it is `Music`. Rests take a
   duration like notes: `r2` is a half rest, `r4.` a dotted-quarter rest.
 - A **tie** `~` joins two **matching** phrases into one with summed durations:
@@ -72,6 +74,11 @@ tuplet 3 2 (c c c) -- an eighth-note triplet  :: Music
 
 A run of notes does not cross line breaks (notation stays on one line); ordinary
 expressions may span lines (see Layout).
+
+**`<` — chord vs. comparison.** A `<` opens a chord only when it *hugs* its first
+note (no space): `<c e g>`. A spaced `<` is the comparison operator, so `a < b`
+compares the pitches `a` and `b` (it does not start a chord). To pass a chord as a
+function argument, parenthesise it: `f (<c e g>)`.
 
 ## Bindings
 
