@@ -61,6 +61,12 @@ void run_typecheck_tests() {
     CHECK(has_type_error("main = 5 :*: 3"));       // left operand not a phrase
     CHECK(has_type_error("main = (c d) :*: P5"));  // right operand not an Int
 
+    // tuplet :: Int -> Int -> Music -> Music ; tie (~) :: Pitch -> Pitch -> Music
+    CHECK_EQ_STR(type_of("main = tuplet 3 2 (c c c)", "main"), "Music");
+    CHECK_EQ_STR(type_of("main = c'4 ~ c'8", "main"), "Music");
+    CHECK(has_type_error("main = tuplet 3 (c c) 2"));  // Music where Int expected
+    CHECK(has_type_error("main = c' ~ (d e)"));        // tie wants two pitches
+
     // lists
     CHECK_EQ_STR(type_of("main = [1, 2, 3]", "main"), "[Int]");
 

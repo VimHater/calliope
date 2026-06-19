@@ -104,12 +104,15 @@ in (loaded units never shift the program's lines).
   projections — `semitones` / `diatonicStep` / `chromaticOf` / `makePitch`; Music IR
   — constructors `note` / `noteWith` / `sequence` / `parallel`, predicates `isNote` /
   `isRest` / `isSeq` / `isPar`, accessors `leftChild` / `rightChild` /
-  `notePitch` / `noteDur`.
+  `notePitch` / `noteDur`, and `tuplet` (scales durations by m/n via
+  `music::scale_dur`). Notation carries durations on notes (`c'8`), rests (`r2`),
+  and chord notes (`<c'2 e'2>`); the tie operator `~` (`Pitch -> Pitch -> Music`,
+  binary, same-pitch) sums two notes into one held note.
 - **Prelude (Calliope):** lists — `length` `map` `filter` `reverse` `drop`
   `foldr` `foldr1` `flip` `append`; music — `note`s/`line`/`chord`/`par`,
   `transpose`, `mapPitches`, `invert` (spelled melodic inversion about the first
-  pitch), `retrograde`, `times`, `reflectPitch`, `firstPitch`. The headline
-  example type-checks and runs:
+  pitch), `retrograde`, `times`, `triplet`, `reflectPitch`, `firstPitch`. The
+  headline example type-checks and runs:
   `development subj = subj `par` (invert subj ^+ P5)`.
 
 **Multi-line expressions** work via an **offside rule** (`Parser.margin`): inside

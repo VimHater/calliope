@@ -561,6 +561,12 @@ void seed_builtins(Checker& ck, Env& env) {
         s.constraints.emplace_back("Phrase", av);
         env.push_back({":*:", s});
     }
+    // tuplet n m music — n notes in the time of m (scales durations by m/n).
+    add_mono("tuplet", t_arrow(c, t_con0(c, "Int"),
+                               t_arrow(c, t_con0(c, "Int"),
+                                       t_arrow(c, t_con0(c, "Music"), t_con0(c, "Music")))));
+    // `~` ties two same-pitch notes into one of summed duration.
+    add_mono("~", t_arrow(c, t_con0(c, "Pitch"), t_arrow(c, t_con0(c, "Pitch"), t_con0(c, "Music"))));
     add_mono("semitones", t_arrow(c, t_con0(c, "Pitch"), t_con0(c, "Int")));
 
     // list axioms — polymorphic schemes (the stdlib is built on these):

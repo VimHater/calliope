@@ -51,6 +51,11 @@ MusicId par(Music& m, MusicId a, MusicId b);
 // structure are preserved. Returns a fresh subtree (input is left untouched).
 MusicId transpose(Music& m, MusicId id, int dstep, int dsemi);
 
+// Scale every Note/Rest duration in the subtree by `factor` (structure and pitch
+// preserved). Used by `tuplet` — e.g. a triplet scales durations by 2/3. Returns
+// a fresh subtree.
+MusicId scale_dur(Music& m, MusicId id, Rational factor);
+
 // Debug rendering, e.g. "(C4:1/4 :+: D4:1/4)".
 std::string show(const Music& m, MusicId id);
 

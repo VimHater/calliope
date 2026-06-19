@@ -64,6 +64,26 @@ MusicId transpose(Music& m, MusicId id, int dstep, int dsemi) {
     return NoMusic;
 }
 
+MusicId scale_dur(Music& m, MusicId id, Rational factor) {
+    if (id == NoMusic) return NoMusic;
+    MusicNode n = m.nodes[id]; // copy: add() may reallocate the pool mid-recursion
+    switch (n.kind) {
+        case MusicKind::Note: return note(m, n.pitch, rat_mul(n.dur, factor));
+        case MusicKind::Rest: return rest(m, rat_mul(n.dur, factor));
+        case MusicKind::Seq: {
+            MusicId a = scale_dur(m, n.left, factor);
+            MusicId b = scale_dur(m, n.right, factor);
+            return seq(m, a, b);
+        }
+        case MusicKind::Par: {
+            MusicId a = scale_dur(m, n.left, factor);
+            MusicId b = scale_dur(m, n.right, factor);
+            return par(m, a, b);
+        }
+    }
+    return NoMusic;
+}
+
 namespace {
 std::string show_dur(const Rational& d) {
     return std::to_string(d.num) + "/" + std::to_string(d.den);

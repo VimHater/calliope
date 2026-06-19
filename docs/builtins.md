@@ -18,6 +18,7 @@ including all music theory — is written in Calliope in the
 | `:+:` | `Phrase t => Phrase u => t -> u -> Music` | sequential composition |
 | `:=:` | `Phrase t => Phrase u => t -> u -> Music` | parallel composition |
 | `:*:` | `Phrase t => t -> Int -> Music` | repeat a phrase n times in a row (`motif :*: 4`); binds tighter than `:+:`; `n >= 1` |
+| `~` | `Pitch -> Pitch -> Music` | tie two **same-pitch** notes into one of summed duration (`c'4 ~ c'8` = `C4:3/8`); binary only (no chaining yet) |
 
 `not :: Bool -> Bool` is a prefix function. `:+:`/`:=:` are methods of the builtin
 `Phrase` class (instances `Pitch` and `Music`): a bare `Pitch` operand lifts to a
@@ -100,6 +101,7 @@ predicates, and accessors let the prelude define structural transforms (`invert`
 | `noteWith` | `Pitch -> Rational -> Music` | a note of an explicit duration |
 | `sequence` | `Music -> Music -> Music` | sequence two phrases (same as `:+:`) |
 | `parallel` | `Music -> Music -> Music` | layer two phrases (same as `:=:`) |
+| `tuplet` | `Int -> Int -> Music -> Music` | `tuplet n m` fits n notes in the time of m (scales every duration by m/n); a triplet is `tuplet 3 2` |
 
 ### Predicates
 

@@ -133,6 +133,15 @@ void run_eval_tests() {
     // `:*:` repeats a phrase n times in a row (right-leaning, like `times`)
     CHECK_EQ_STR(eval::show_value(run_main("c' :*: 3")),
                  "(C4:1/4 :+: (C4:1/4 :+: C4:1/4))");
+    // rests carry durations (default quarter, `r2` = half, `r4.` = dotted quarter)
+    CHECK_EQ_STR(eval::show_value(run_main("r")),  "r:1/4");
+    CHECK_EQ_STR(eval::show_value(run_main("r2")), "r:1/2");
+    CHECK_EQ_STR(eval::show_value(run_main("r4.")), "r:3/8");
+    // tuplet 3 2: a triplet scales each duration by 2/3 (quarter -> 1/6)
+    CHECK_EQ_STR(eval::show_value(run_main("tuplet 3 2 (c' c' c')")),
+                 "((C4:1/6 :+: C4:1/6) :+: C4:1/6)");
+    // tie: two same-pitch notes join into one of summed duration
+    CHECK_EQ_STR(eval::show_value(run_main("c'4 ~ c'8")), "C4:3/8");
 
     // ---- pipe, cons, case ------------------------------------------------
     // pipe: x |> f = f x (left-associative, so it chains)

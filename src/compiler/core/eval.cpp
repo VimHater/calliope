@@ -50,6 +50,7 @@ enum BuiltinId {
     B_SEQM, B_PARM,
     B_ISNOTE, B_ISREST, B_ISSEQ, B_ISPAR,
     B_MLEFT, B_MRIGHT,
+    B_TUPLET,
 };
 
 struct BuiltinInfo { const char* name; int id; int arity; };
@@ -71,6 +72,7 @@ const BuiltinInfo kBuiltins[] = {
     {"isNote", B_ISNOTE, 1}, {"isRest", B_ISREST, 1},
     {"isSeq", B_ISSEQ, 1}, {"isPar", B_ISPAR, 1},
     {"leftChild", B_MLEFT, 1}, {"rightChild", B_MRIGHT, 1},
+    {"tuplet", B_TUPLET, 3},
 };
 
 // Interval name -> (diatonic steps, semitones). Enough common ones to be useful.
@@ -260,6 +262,18 @@ Value call_builtin(Interp& I, int id, std::vector<Value>& a) {
             }
             return music_value(I, id == B_MLEFT ? n.left : n.right);
         }
+
+        // ---- tuplet: n notes in the time of m (scale durations by m/n) ---
+        case B_TUPLET: {
+            long long n = a[0].i, mm = a[1].i;
+            if (n <= 0 || mm <= 0) {
+                I.errors.push_back("tuplet: counts must be >= 1");
+                return a[2];
+            }
+            Rational factor = rational(mm, n);
+            music::MusicId src = to_music(I, a[2]);
+            return music_value(I, music::scale_dur(*I.music, src, factor));
+        }
     }
     I.errors.push_back("unknown builtin");
     return v_unit();
@@ -270,6 +284,20 @@ Value call_builtin(Interp& I, int id, std::vector<Value>& a) {
 // letters: c=0 d=1 e=2 f=3 g=4 a=5 b=6 ; bare letter is octave 3 (so c' = C4).
 // duration: trailing LilyPond number (4 = 1/4, 8 = 1/8, 1 = whole) with optional
 // dots; absent => quarter note (1/4).
+// Decode a trailing LilyPond duration ("4", "8.", "2..") at t[i]. On a leading
+// digit, writes out_dur and advances i past digits+dots; otherwise leaves both.
+void decode_dur(std::string_view t, std::size_t& i, Rational& out_dur) {
+    long long base = 0;
+    bool any = false;
+    while (i < t.size() && t[i] >= '0' && t[i] <= '9') { base = base * 10 + (t[i] - '0'); i++; any = true; }
+    if (!any || base <= 0) return;
+    Rational d = rational(1, base);
+    // dots: each adds half of the running value (dotted = 3/2, double = 7/4).
+    Rational add = d;
+    while (i < t.size() && t[i] == '.') { add = rat_div(add, rational(2, 1)); d = rat_add(d, add); i++; }
+    out_dur = d;
+}
+
 void decode_pitch(std::string_view t, Pitch& out_p, Rational& out_dur) {
     static const int letter_of[7] = {5, 6, 0, 1, 2, 3, 4}; // a b c d e f g -> index
     out_p = pitch(0, 0, 3);
@@ -286,16 +314,15 @@ void decode_pitch(std::string_view t, Pitch& out_p, Rational& out_dur) {
     while (i < t.size() && t[i] == '\'') { octave++; i++; }
     while (i < t.size() && t[i] == ',')  { octave--; i++; }
     out_p = pitch(li, accidental, octave);
-    // duration digits
-    long long base = 0;
-    while (i < t.size() && t[i] >= '0' && t[i] <= '9') { base = base * 10 + (t[i] - '0'); i++; }
-    if (base > 0) {
-        Rational d = rational(1, base);
-        // dots: each adds half of the running value (dotted = 3/2, double = 7/4).
-        Rational add = d;
-        while (i < t.size() && t[i] == '.') { add = rat_div(add, rational(2, 1)); d = rat_add(d, add); i++; }
-        out_dur = d;
-    }
+    decode_dur(t, i, out_dur);
+}
+
+// A rest literal "r" / "R" / "s" with an optional duration ("r2", "r4.").
+Rational decode_rest_dur(std::string_view t) {
+    Rational d = rational(1, 4);
+    std::size_t i = 1; // skip the r/R/s letter
+    decode_dur(t, i, d);
+    return d;
 }
 
 Value v_pitch_dur(Pitch p, Rational dur) {
@@ -447,7 +474,7 @@ Value eval(Interp& I, NodeId id, const std::shared_ptr<Env>& env) {
             decode_pitch(n.tok.text, p, d);
             return v_pitch_dur(p, d);
         }
-        case NodeKind::RestLit:  return music_value(I, music::rest(*I.music, rational(1, 4)));
+        case NodeKind::RestLit:  return music_value(I, music::rest(*I.music, decode_rest_dur(n.tok.text)));
         case NodeKind::Con:
             if (n.tok.text == "True")  return v_bool(true);
             if (n.tok.text == "False") return v_bool(false);
@@ -502,6 +529,20 @@ Value eval(Interp& I, NodeId id, const std::shared_ptr<Env>& env) {
             if (op == "|>") return apply(I, std::move(r), std::move(l)); // x |> f = f x
             if (op == ":+:") return music_value(I, music::seq(*I.music, to_music(I, l), to_music(I, r)));
             if (op == ":=:") return music_value(I, music::par(*I.music, to_music(I, l), to_music(I, r)));
+            if (op == "~") {
+                // tie: two same-pitch notes join into one of summed duration
+                if (l.kind != ValueKind::Pitch || r.kind != ValueKind::Pitch) {
+                    I.errors.push_back("(~): tie expects two pitch literals");
+                    return v_unit();
+                }
+                if (!pitch_eq(l.pitch, r.pitch)) {
+                    I.errors.push_back("(~): tied notes must be the same pitch");
+                    return v_unit();
+                }
+                Rational dl = (l.rat.num > 0) ? l.rat : rational(1, 4);
+                Rational dr = (r.rat.num > 0) ? r.rat : rational(1, 4);
+                return music_value(I, music::note(*I.music, l.pitch, rat_add(dl, dr)));
+            }
             if (op == ":*:") {
                 // phrase :*: n  —  n copies in a row (right-leaning, like `times`)
                 long long n = r.i;

@@ -140,3 +140,7 @@ retrograde phrase =
 -- repeat a phrase n times in a row (n >= 1)
 times :: Int -> Music -> Music
 times n phrase = if n == 1 then phrase else sequence phrase (times (n - 1) phrase)
+
+-- a triplet: three notes in the time normally taken by two (durations * 2/3)
+triplet :: Music -> Music
+triplet phrase = tuplet 3 2 phrase

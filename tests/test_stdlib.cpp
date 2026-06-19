@@ -138,6 +138,9 @@ void run_stdlib_tests() {
     // repeat a phrase
     CHECK_EQ_STR(eval::show_value(run("main = times 3 c'")),
                  "(C4:1/4 :+: (C4:1/4 :+: C4:1/4))");
+    // triplet = tuplet 3 2: three notes in the time of two (quarter -> 1/6)
+    CHECK_EQ_STR(eval::show_value(run("main = triplet (c' c' c')")),
+                 "((C4:1/6 :+: C4:1/6) :+: C4:1/6)");
     CHECK_EQ_STR(type_of("main = 0", "line"), "[Music] -> Music");
 
     // the headline composer example: a subject in parallel with its inversion,
