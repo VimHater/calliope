@@ -35,7 +35,21 @@ void run_eval_tests() {
     CHECK(run_main("1 + 2 * 3").i == 7);
     CHECK(run_main("(1 + 2) * 3").i == 9);
     CHECK(run_main("10 - 4 - 3").i == 3);   // left assoc would be 3; check value
-    CHECK(run_main("8 / 2").i == 4);
+    CHECK(run_main("8 `div` 2").i == 4);    // integer division is now `div`
+    CHECK(run_main("7 `mod` 3").i == 1);
+    CHECK(run_main("2 + 6 `div` 2").i == 5); // `div` binds tighter than `+`
+    // `/` is fractional: two Ints make an exact Rational
+    {
+        eval::Value r = run_main("7 / 2");
+        CHECK(r.kind == eval::ValueKind::Rat && r.rat.num == 7 && r.rat.den == 2);
+        eval::Value sum = run_main("1 / 2 + 1 / 4"); // Rational + Rational
+        CHECK(sum.kind == eval::ValueKind::Rat && sum.rat.num == 3 && sum.rat.den == 4);
+        // mismatched Int + Rational coerces the Int up: 1 + 1/2 = 3/2
+        eval::Value mix = run_main("1 + 1 / 2");
+        CHECK(mix.kind == eval::ValueKind::Rat && mix.rat.num == 3 && mix.rat.den == 2);
+        eval::Value mix2 = run_main("(1 / 2) * 4"); // Rational * Int = 2/1
+        CHECK(mix2.kind == eval::ValueKind::Rat && mix2.rat.num == 2 && mix2.rat.den == 1);
+    }
 
     // comparison + if
     CHECK(run_main("if 1 < 2 then 10 else 20").i == 10);

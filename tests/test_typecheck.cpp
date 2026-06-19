@@ -32,9 +32,24 @@ void run_typecheck_tests() {
     CHECK_EQ_STR(type_of("main = 1 + 2 * 3", "main"), "Int");
     CHECK_EQ_STR(type_of("main = 1 < 2", "main"), "Bool");
 
+    // `/` is fractional (Int -> Int -> Rational); `div`/`mod` are integer
+    CHECK_EQ_STR(type_of("main = 7 / 2", "main"), "Rational");
+    CHECK_EQ_STR(type_of("main = 7 `div` 2", "main"), "Int");
+    CHECK_EQ_STR(type_of("main = 7 `mod` 2", "main"), "Int");
+    CHECK_EQ_STR(type_of("main = toRational 3", "main"), "Rational");
+    // `+ - *` are the Num class: work on Int and on Rational
+    CHECK_EQ_STR(type_of("main = 1 / 2 + 1 / 4", "main"), "Rational");
+    CHECK_EQ_STR(type_of("main = toRational 1 * (1 / 2)", "main"), "Rational");
+    CHECK(has_type_error("main = True + False"));    // no instance for Num Bool
+    // a grounded Int/Rational mismatch coerces up to Rational (1 + 1/2 = 3/2)
+    CHECK_EQ_STR(type_of("main = 1 + (1 / 2)", "main"), "Rational");
+    CHECK_EQ_STR(type_of("main = (1 / 2) * 3", "main"), "Rational");
+    CHECK_EQ_STR(type_of("main = 1 + 2 * (1 / 2)", "main"), "Rational");
+
     // function types
-    CHECK_EQ_STR(type_of("inc x = x + 1", "inc"), "Int -> Int");
-    CHECK_EQ_STR(type_of("k x y = x + y", "k"), "Int -> Int -> Int");
+    CHECK_EQ_STR(type_of("inc x = x + 1", "inc"), "Int -> Int"); // `1` pins it to Int
+    // with no literal to pin the type, `+` generalizes over the Num class
+    CHECK_EQ_STR(type_of("k x y = x + y", "k"), "Num t0 => t0 -> t0 -> t0");
 
     // polymorphic identity (let-generalized at top level)
     CHECK_EQ_STR(type_of("id x = x", "id"), "t0 -> t0");

@@ -40,7 +40,7 @@ void env_define(const std::shared_ptr<Env>& e, std::string name, Value v) {
 
 // ---- builtins -----------------------------------------------------------
 enum BuiltinId {
-    B_ADD, B_SUB, B_MUL, B_DIV,
+    B_ADD, B_SUB, B_MUL, B_DIV, B_IDIV, B_MOD, B_TORATIONAL,
     B_EQ, B_NE, B_LT, B_GT, B_LE, B_GE, B_NOT,
     B_TRANSPOSE_UP, B_TRANSPOSE_DOWN,
     B_SEMITONES,
@@ -61,6 +61,7 @@ struct BuiltinInfo { const char* name; int id; int arity; };
 
 const BuiltinInfo kBuiltins[] = {
     {"+", B_ADD, 2}, {"-", B_SUB, 2}, {"*", B_MUL, 2}, {"/", B_DIV, 2},
+    {"div", B_IDIV, 2}, {"mod", B_MOD, 2}, {"toRational", B_TORATIONAL, 1},
     {"==", B_EQ, 2}, {"/=", B_NE, 2},
     {"<", B_LT, 2}, {">", B_GT, 2}, {"<=", B_LE, 2}, {">=", B_GE, 2},
     {"not", B_NOT, 1},
@@ -149,12 +150,32 @@ bool values_equal(Interp& I, const Value& x, const Value& y) {
 
 Value call_builtin(Interp& I, int id, std::vector<Value>& a) {
     switch (id) {
-        case B_ADD: return v_int(a[0].i + a[1].i);
-        case B_SUB: return v_int(a[0].i - a[1].i);
-        case B_MUL: return v_int(a[0].i * a[1].i);
+        // `+ - *` are the Num class: Rational when the operands are Rational (the
+        // typechecker keeps both sides the same type), Int otherwise.
+        case B_ADD: case B_SUB: case B_MUL: {
+            if (a[0].kind == ValueKind::Rat || a[1].kind == ValueKind::Rat) {
+                Rational l = a[0].kind == ValueKind::Rat ? a[0].rat : rational_from_int(a[0].i);
+                Rational r = a[1].kind == ValueKind::Rat ? a[1].rat : rational_from_int(a[1].i);
+                return v_rat(id == B_ADD ? rat_add(l, r)
+                           : id == B_SUB ? rat_sub(l, r)
+                                         : rat_mul(l, r));
+            }
+            return v_int(id == B_ADD ? a[0].i + a[1].i
+                       : id == B_SUB ? a[0].i - a[1].i
+                                     : a[0].i * a[1].i);
+        }
+        // `/` is fractional division: two Ints make an exact Rational.
         case B_DIV:
             if (a[1].i == 0) { I.errors.push_back("division by zero"); return v_unit(); }
+            return v_rat(rational(a[0].i, a[1].i));
+        // `div` / `mod` are integer division and remainder (truncating toward zero).
+        case B_IDIV:
+            if (a[1].i == 0) { I.errors.push_back("division by zero"); return v_unit(); }
             return v_int(a[0].i / a[1].i);
+        case B_MOD:
+            if (a[1].i == 0) { I.errors.push_back("division by zero"); return v_unit(); }
+            return v_int(a[0].i % a[1].i);
+        case B_TORATIONAL: return v_rat(rational_from_int(a[0].i));
         case B_EQ: case B_NE: {
             bool eq = values_equal(I, a[0], a[1]);
             return v_bool(id == B_EQ ? eq : !eq);

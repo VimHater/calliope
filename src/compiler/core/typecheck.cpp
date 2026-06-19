@@ -250,6 +250,20 @@ TypeId infer(Checker& ck, Env& env, NodeId id) {
             }
             TypeId tl = infer(ck, env, n.kids[0]);
             TypeId tr = infer(ck, env, n.kids[1]);
+            // Num operators (`+ - *`) coerce a grounded Int/Rational mismatch up to
+            // Rational rather than rejecting it: `1 + (1/2)` reads as `(1/1) + (1/2)`.
+            // (The evaluator already lifts the Int operand.) Same-type and still-
+            // polymorphic operands fall through to the normal class-based unify.
+            std::string_view op = n.tok.text;
+            if (op == "+" || op == "-" || op == "*") {
+                const TypeNode& nl = c.pool[resolve(c, tl)];
+                const TypeNode& nr = c.pool[resolve(c, tr)];
+                bool lInt = !nl.is_var && nl.con == "Int";
+                bool lRat = !nl.is_var && nl.con == "Rational";
+                bool rInt = !nr.is_var && nr.con == "Int";
+                bool rRat = !nr.is_var && nr.con == "Rational";
+                if ((lInt && rRat) || (lRat && rInt)) return t_con0(c, "Rational");
+            }
             TypeId res = new_var(c);
             unify(ck, top, t_arrow(c, tl, t_arrow(c, tr, res)));
             return resolve(c, res);
@@ -500,10 +514,29 @@ void seed_builtins(Checker& ck, Env& env) {
     TypeId Pitch = t_con0(c, "Pitch");
     TypeId Interval = t_con0(c, "Interval");
     auto iii = [&]() { return t_arrow(c, t_con0(c, "Int"), t_arrow(c, t_con0(c, "Int"), t_con0(c, "Int"))); };
-    add_mono("+", iii());
-    add_mono("-", iii());
-    add_mono("*", iii());
-    add_mono("/", iii());
+    // `+ - *` are a builtin single-parameter class Num (instances Int and Rational),
+    // so the same operators add/scale both whole numbers and exact fractions; the two
+    // operands share a type (no implicit Int/Rational mixing — lift with toRational).
+    //   (+), (-), (*) :: Num a => a -> a -> a
+    for (const char* op : {"+", "-", "*"}) {
+        TypeId a = new_var(c); int av = c.pool[a].var;
+        Scheme s;
+        s.vars.push_back(av);
+        s.type = t_arrow(c, a, t_arrow(c, a, a));
+        s.constraints.emplace_back("Num", av);
+        env.push_back({op, s});
+    }
+    ck.classes.push_back({"Num", "a", {"+", "-", "*"}});
+    ck.instances.emplace_back("Num", "Int");
+    ck.instances.emplace_back("Num", "Rational");
+    // `/` is fractional division: two Ints produce an exact Rational (7 / 2 = 7/2).
+    // Integer division / remainder are the named `div` / `mod` (used infix:
+    // `` 7 `div` 2 ``). `toRational` lifts an Int into the Rational world.
+    add_mono("/", t_arrow(c, t_con0(c, "Int"),
+                          t_arrow(c, t_con0(c, "Int"), t_con0(c, "Rational"))));
+    add_mono("div", iii());
+    add_mono("mod", iii());
+    add_mono("toRational", t_arrow(c, t_con0(c, "Int"), t_con0(c, "Rational")));
     // ordering is a builtin single-parameter class Ord (instances Int and Pitch;
     // pitches order by height / semitones). Music has no order — comparing two
     // phrases with `<` is a `no instance for Ord Music` error.

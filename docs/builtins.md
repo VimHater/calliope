@@ -8,7 +8,10 @@ including all music theory — is written in Calliope in the
 
 | Operator | Type | Notes |
 |----------|------|-------|
-| `+` `-` `*` `/` | `Int -> Int -> Int` | `/` is integer division; divide by zero is an error |
+| `+` `-` `*` | `Num t => t -> t -> t` | arithmetic over the `Num` class — instances `Int` and `Rational`; a mismatched `Int`/`Rational` pair coerces up to `Rational` (`1 + 1/2` = `3/2`) |
+| `/` | `Int -> Int -> Rational` | fractional division: two ints make an exact `Rational` (`7 / 2` = `7/2`); divide by zero is an error |
+| `` `div` `` `` `mod` `` | `Int -> Int -> Int` | integer division and remainder, used infix (`` 7 `div` 2 ``); bind like `*`; divide by zero is an error |
+| `toRational` | `Int -> Rational` | lift an `Int` into the `Rational` world (mismatched literals already coerce; use this to force a value through a `Rational`-typed parameter) |
 | `==` `/=` | `a -> a -> Bool` | structural equality: `Int`, `Bool`, `Pitch` (spelled: `fis' /= ges'`), and `Music` (deep: same shape, pitches, durations) |
 | `<` `>` `<=` `>=` | `Ord t => t -> t -> Bool` | ordering on `Int` and `Pitch` (pitches by height / semitones, so `fis' <= ges'`); no instance for `Music` |
 | `and` `or` | `Bool -> Bool -> Bool` | keyword operators, **short-circuit** |

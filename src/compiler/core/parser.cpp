@@ -499,7 +499,12 @@ NodeId parse_expr(Parser& p, int min_prec) {
             op_tok = t;
             advance(p);
         } else if (t.kind == TokenKind::Backtick) {
-            prec = 4; right = false; // provisional: like the music combinators
+            // Most backtick functions bind loosely like the music combinators (`par`);
+            // the integer-division names bind tightly like `*` so `a + b `div` c` reads
+            // as `a + (b `div` c)`, matching Haskell's infixl 7 for div/mod.
+            std::string_view name = peek_at(p, 1).text;
+            prec = (name == "div" || name == "mod") ? 7 : 4;
+            right = false;
             if (prec < min_prec) break;
             advance(p); // opening `
             op_tok = cur(p);

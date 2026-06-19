@@ -194,6 +194,18 @@ Int`). Adjacency (`c d e`, a `Seq`) is still the idiomatic spelling. `:*:`
 repeats a phrase: `phrase :*: n :: Phrase t => t -> Int -> Music` (n copies in a
 row, `n >= 1`; binds tighter than `:+:`).
 
+**Arithmetic.** `+ - *` are a builtin single-parameter class **`Num`** (instances
+`Int` and `Rational`), so they add/scale both whole numbers and exact fractions. A
+grounded `Int`/`Rational` mismatch **coerces up to `Rational`** (`1 + 1/2` reads as
+`(1/1) + (1/2)` = `3/2`) — special-cased in the `BinOp` inferer for `+ - *`; the
+evaluator already lifts the `Int` operand. (`toRational :: Int -> Rational` still
+forces a value through a `Rational`-typed parameter, where the operator-site coercion
+doesn't reach.) `/` is **fractional** — `Int -> Int -> Rational` (`7 / 2` = `7/2`),
+so durations fall out of plain division (`noteWith c' (3 / 8)`). Integer division and
+remainder are the named `div` / `mod` (`Int -> Int -> Int`, used infix `` 7 `div` 2 ``,
+binding like `*` — tighter than `+`). Like `Ord`, these are typecheck-level classes;
+eval keeps `+`/`/` as builtins that branch on operand kind.
+
 **Comparison.** `==`/`/=` are polymorphic structural equality — on `Pitch`
 (spelled: `fis' /= ges'`) and `Music` (deep, via `music::equal`: same shape,
 pitches, durations). Ordering `< > <= >=` is a builtin class **`Ord`** (instances
