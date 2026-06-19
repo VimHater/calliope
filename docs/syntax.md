@@ -15,6 +15,12 @@ spelled like a pitch**. So `c`, `f`, `cis`, `e4` cannot be variable names, and t
 letters `r`, `R`, `s` are reserved as rests. Every other name is free: `subject`,
 `motif`, `phrase`, `x`, `func`.
 
+A word is a pitch (or rest) **only when the whole maximal word is exactly one**. A
+name may *start* with a pitch letter as long as the word as a whole isn't a bare
+pitch: if an identifier character (a letter or `_`) trails the pitch shape, the
+entire word is one identifier, never a pitch plus a dangling tail. So `c_foo`,
+`e_value`, `fis_sharp`, `d3note`, `g2x`, `r2d2`, and `s_x` are all ordinary names.
+
 This applies to **type variables** too (they are identifiers). The Haskell-style
 `class Transposable a` must use a non-pitch variable in Calliope — the convention
 is `t`:

@@ -1,0 +1,39 @@
+-- recursion.cal — recursion is how Calliope repeats and walks structure.
+--
+-- There are no loops: a function calls itself on a smaller argument until it
+-- hits a base case. The same idea counts, recurses over a list's shape, and
+-- — the point of the language — builds Music.
+
+#load "prelude"
+
+-- 1. plain numeric recursion: the nth Fibonacci number
+fib n = if n < 2 then n else fib (n - 1) + fib (n - 2)
+-- fib 10 == 55
+
+-- 2. mutual recursion: each function is defined in terms of the other
+isEven n = if n == 0 then True  else isOdd  (n - 1)
+isOdd  n = if n == 0 then False else isEven (n - 1)
+-- isEven 10 == True
+
+-- 3. structural recursion over a list — match on its shape, recur on the tail
+countNotes xs = case xs of
+  []           -> 0
+  first : rest -> 1 + countNotes rest
+-- countNotes [c', e', g'] == 3
+
+-- 4. recursion that BUILDS music: stack a phrase on itself, n layers deep,
+--    each layer a perfect fifth above the last (Music is Transposable)
+stack n phrase =
+  if n <= 1 then phrase
+  else phrase `par` stack (n - 1) (phrase ^+ P5)
+
+-- 5. recursion that builds a rising line: n notes from a start pitch, each a
+--    whole tone (M2) above the previous one
+climb n p =
+  if n <= 1 then note p
+  else note p :+: climb (n - 1) (p ^+ M2)
+
+theme = c' e' g'
+
+-- three fifth-stacked copies of the theme, then a `fib 5`-note whole-tone climb
+main = stack 3 theme :+: climb (fib 5) c'

@@ -149,7 +149,10 @@ in (loaded units never shift the program's lines).
   (`<c e g> ~ <c e g>`), and chains — summing durations; mismatched pitch/shape is
   a runtime error.
 - **Prelude (Calliope):** lists — `length` `map` `filter` `reverse` `drop`
-  `foldr` `foldr1` `flip` `append`; music — `note`s/`line`/`chord`/`par`,
+  `foldr` `foldr1` `flip` `append`; math — `negate` `abs` `signum` `even` `odd`
+  `gcd` `lcm` `power` `min` `max` `clamp` `sum` `product` `maximum` `minimum`
+  (`min`/`max`/`maximum`/`minimum` are `Ord`-polymorphic, so they order pitches too);
+  music — `note`s/`line`/`chord`/`par`,
   `transpose`, `mapPitches`, `invert` (spelled melodic inversion about the first
   pitch), `retrograde`, `times`, `triplet`, `onInstrument`, `reflectPitch`,
   `firstPitch`. The
@@ -382,7 +385,12 @@ Vendored libs have per-platform prebuilts under
   identifiers can't match it, so a pitch vs. a name is decided lexically (no
   sigil, no scope/type lookup). Adjacency of pitch literals = sequential
   composition. Juxtaposition with a non-pitch head = function application — the
-  grammar stays context-free.
+  grammar stays context-free. A word is a pitch/rest **only when the whole
+  maximal word is exactly one** — a trailing identifier char (a letter or `_`)
+  means the entire word is an ordinary name, never a pitch + dangling tail
+  (`fis_sharp`, `d3note`, `c_foo`, `g2x`, `r2d2`, `s_x` each lex as one
+  identifier). A name may *start* with any of `a`–`g`/`r`/`s`; it just can't *be*
+  a bare pitch (`c`, `cis`, `e4`).
 - **Prefer exact rationals for durations** (spec O11) — avoids tuplet/tie drift.
 - **Keep pitch spelling in the IR** (C# ≠ Db, spec O2/O8); collapse to semitones
   only at the playback boundary.

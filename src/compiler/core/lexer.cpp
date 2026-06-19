@@ -172,34 +172,54 @@ std::vector<Token> tokenize(std::string_view src) {
             continue;
         }
 
-        // word: pitch / rest / identifier / constructor
+        // word: pitch / rest / identifier / constructor.
+        //
+        // A pitch or rest is reserved *only when the whole maximal word is
+        // exactly one*. We scan the candidate pitch/rest shape with a local
+        // cursor first; if an identifier-continuation char (a letter or '_')
+        // immediately follows it, the word is an ordinary identifier that just
+        // happens to start with a pitch spelling (`fis_sharp`, `d3note`,
+        // `c_foo`, `g2x`) — never split it into pitch + tail.
         if (is_alpha(c) || c == '_') {
-            std::size_t letters_start = L.pos;
-            while (!at_end() && is_alpha(peek())) adv();
-            std::string_view run = src.substr(letters_start, L.pos - letters_start);
+            auto src_at  = [&](std::size_t p) -> char { return p < src.size() ? src[p] : '\0'; };
+            // chars a pitch/rest can't contain but an identifier can — if one
+            // of these trails the candidate, it isn't notation, it's a name.
+            auto ident_tail = [&](char ch) { return is_alpha(ch) || ch == '_'; };
+            auto advance_to = [&](std::size_t target) { while (L.pos < target) adv(); };
+
+            // maximal run of letters
+            std::size_t j = L.pos;
+            while (j < src.size() && is_alpha(src[j])) j++;
+            std::string_view run = src.substr(L.pos, j - L.pos);
 
             // single-letter rest / spacer notation, with optional duration
             if (run == "r" || run == "R" || run == "s") {
-                while (!at_end() && is_digit(peek())) adv();
-                while (!at_end() && peek() == '.') adv();
-                push(TokenKind::Rest, start, ln, cl);
-                continue;
+                std::size_t k = j;
+                while (is_digit(src_at(k))) k++;
+                while (src_at(k) == '.') k++;
+                if (!ident_tail(src_at(k))) {
+                    advance_to(k);
+                    push(TokenKind::Rest, start, ln, cl);
+                    continue;
+                }
             }
 
             // reserved pitch class
             if (matches_pitch_head(run)) {
-                if (!at_end() && peek() == '\'') {
-                    while (!at_end() && peek() == '\'') adv();
-                } else if (!at_end() && peek() == ',') {
-                    while (!at_end() && peek() == ',') adv();
+                std::size_t k = j;
+                if (src_at(k) == '\'')      { while (src_at(k) == '\'') k++; }
+                else if (src_at(k) == ',')  { while (src_at(k) == ',')  k++; }
+                while (is_digit(src_at(k))) k++;   // duration
+                while (src_at(k) == '.') k++;      // dots
+                if (!ident_tail(src_at(k))) {
+                    advance_to(k);
+                    push(TokenKind::Pitch, start, ln, cl);
+                    continue;
                 }
-                while (!at_end() && is_digit(peek())) adv();   // duration
-                while (!at_end() && peek() == '.') adv();      // dots
-                push(TokenKind::Pitch, start, ln, cl);
-                continue;
             }
 
             // identifier / constructor: extend with alnum / _ / '
+            advance_to(j);
             while (!at_end() && (is_alpha(peek()) || is_digit(peek()) ||
                                  peek() == '_' || peek() == '\''))
                 adv();

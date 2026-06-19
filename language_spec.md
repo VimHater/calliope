@@ -77,6 +77,13 @@ every other name is free (`subject`, `motif`, `x`, `n`, `development`).
 That single rule removes the only ambiguity — a lone `c` is unmistakably the
 note C, decided at lex time, before types or scope. No sigil, no delimiter.
 
+"Pitch-shaped" means the **whole maximal word** is exactly a pitch. A name may
+*begin* with a pitch letter; it is reserved only if the entire word is a bare
+pitch. When an identifier character (a letter or `_`) trails the pitch shape, the
+word is one identifier — never a pitch plus a leftover tail. So `c_foo`,
+`fis_sharp`, `d3note`, `g2x`, and the rest-shaped `r2d2` / `s_x` are all ordinary
+names.
+
 | Token shape | Meaning |
 |---|---|
 | pitch-shaped (`c`, `fis`, `g'`, `e4`) | pitch literal — **always**, reserved |

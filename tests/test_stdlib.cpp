@@ -112,6 +112,27 @@ void run_stdlib_tests() {
     CHECK(!type_errors("main = length [1, 2, 3] + length [True, False]"));
     CHECK(run("main = length (reverse [c', e', g'])").i == 3); // length on pitches
 
+    // ---- math ------------------------------------------------------------
+    CHECK(run("main = gcd 24 36").i == 12);
+    CHECK(run("main = lcm 4 6").i == 12);
+    CHECK(run("main = power 2 10").i == 1024);
+    CHECK(run("main = abs (negate 7)").i == 7);
+    CHECK(run("main = signum (negate 3)").i == -1);
+    CHECK(run("main = signum 0").i == 0);
+    CHECK(run("main = even 10").i == 1);    // True
+    CHECK(run("main = odd 10").i == 0);     // False
+    CHECK(run("main = max 5 9").i == 9);
+    CHECK(run("main = min 5 9").i == 5);
+    CHECK(run("main = clamp 0 10 15").i == 10);
+    CHECK(run("main = clamp 0 10 (negate 4)").i == 0);
+    CHECK(run("main = sum [1, 2, 3, 4]").i == 10);
+    CHECK(run("main = product [1, 2, 3, 4]").i == 24);
+    CHECK(run("main = maximum [3, 9, 2]").i == 9);
+    CHECK(run("main = minimum [3, 9, 2]").i == 2);
+    // min / max / maximum are Ord-polymorphic — also order pitches by height
+    CHECK_EQ_STR(type_of("main = 0", "max"), "Ord t0 => t0 -> t0 -> t0");
+    CHECK(eval::show_value(run("main = max c' e'")) == std::string("E4"));
+
     // ---- music transforms ------------------------------------------------
     // build a phrase from a list of pitches, sequence / stack it
     CHECK_EQ_STR(eval::show_value(run("main = line (notes [c', e', g'])")),

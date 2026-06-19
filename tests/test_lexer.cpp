@@ -37,6 +37,36 @@ void run_lexer_tests() {
     CHECK(first("subj").kind == TokenKind::Ident);
     CHECK(first("rest").kind == TokenKind::Ident);
 
+    // a word is a pitch/rest only when the WHOLE word is exactly one — a
+    // trailing identifier char (letter / '_') makes the whole thing a name,
+    // never a pitch + dangling tail. (Applies to all of a..g, r, s.)
+    {
+        // pitch spelling + identifier tail -> one identifier
+        std::vector<Token> t = lex::tokenize("c_foo");
+        CHECK(t.size() == 2 && t[0].kind == TokenKind::Ident);
+        CHECK_EQ_STR(t[0].text, "c_foo");
+    }
+    CHECK(first("c_foo").kind == TokenKind::Ident);
+    CHECK(first("e_value").kind == TokenKind::Ident);
+    CHECK(first("a_b").kind == TokenKind::Ident);        // a/b included too
+    CHECK(first("fis_sharp").kind == TokenKind::Ident);  // accidental + tail
+    CHECK(first("d3note").kind == TokenKind::Ident);     // octave-ish + letters
+    CHECK(first("g2x").kind == TokenKind::Ident);        // duration-ish + letter
+    CHECK(first("c'x").kind == TokenKind::Ident);        // octave mark + letter
+    // rest / spacer with an identifier tail is likewise one name
+    CHECK(first("s_x").kind == TokenKind::Ident);
+    CHECK(first("rests").kind == TokenKind::Ident);
+    {
+        std::vector<Token> t = lex::tokenize("r2d2");   // not Rest r2 + Pitch d2
+        CHECK(t.size() == 2 && t[0].kind == TokenKind::Ident);
+        CHECK_EQ_STR(t[0].text, "r2d2");
+    }
+    // genuine pitches/rests are unaffected (whole word is exactly notation)
+    CHECK(first("c'").kind == TokenKind::Pitch);
+    CHECK(first("fis'8").kind == TokenKind::Pitch);
+    CHECK(first("e4").kind == TokenKind::Pitch);
+    CHECK(first("r4").kind == TokenKind::Rest);
+
     // operators and punctuation
     CHECK(first(":+:").kind == TokenKind::Operator);
     CHECK(first(":=:").kind == TokenKind::Operator);

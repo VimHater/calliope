@@ -38,6 +38,35 @@ helper can be used at several types in one program:
 main = length [1, 2, 3] + length [True, False]   -- 5
 ```
 
+## Math
+
+Built on the numeric axioms (`+ - *`, `/`, `div`, `mod`, the Ord comparisons).
+
+| Function | Type | Description |
+|----------|------|-------------|
+| `negate` | `Int -> Int` | arithmetic negation (`0 - n`) |
+| `abs` | `Int -> Int` | absolute value |
+| `signum` | `Int -> Int` | sign as `-1`, `0`, or `1` |
+| `even` `odd` | `Int -> Bool` | parity (via `mod n 2`) |
+| `gcd` | `Int -> Int -> Int` | greatest common divisor (Euclid) |
+| `lcm` | `Int -> Int -> Int` | least common multiple (`0` if either is `0`) |
+| `power` | `Int -> Int -> Int` | `power n k` = nᵏ for `k >= 0` (`k <= 0` gives `1`) |
+| `min` `max` | `Ord t => t -> t -> t` | smaller / larger of two ordered values |
+| `clamp` | `Ord t => t -> t -> t -> t` | `clamp lo hi x` confines `x` to `[lo, hi]` |
+| `sum` `product` | `[Int] -> Int` | sum / product of a list |
+| `maximum` `minimum` | `Ord t => [t] -> t` | largest / smallest of a non-empty list |
+
+`min` / `max` / `maximum` / `minimum` are `Ord`-polymorphic, so they order pitches
+by height too (`max c' e'` is `E4`).
+
+```
+gcd 24 36          -- 12
+power 2 10         -- 1024
+clamp 0 10 15      -- 10
+sum [1, 2, 3, 4]   -- 10
+maximum [3, 9, 2]  -- 9
+```
+
 ## Building phrases
 
 | Function | Type | Description |

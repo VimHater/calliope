@@ -1,0 +1,35 @@
+-- constraints.cal — type-class constraints: the `=>` in a signature.
+--
+-- A constraint like `Ord t =>` reads "for any type t that is an Ord instance".
+-- The function stays polymorphic, but only over types that support what it does.
+-- Calliope infers constraints on its own; writing them just documents intent —
+-- and the same definition then serves several types at once.
+
+#load "prelude"
+
+-- works for ANY ordered type — Int and Pitch are both Ord instances
+biggest :: Ord t => t -> t -> t
+biggest x y = if x >= y then x else y
+
+topNote = biggest c' g'      -- G4   (pitches order by height)
+topInt  = biggest 3 8        -- 8
+
+-- the constraint can be inferred: no signature here, yet `peak` is `Ord t => ...`
+peak xs = foldr1 biggest xs  -- the maximum of a non-empty list
+
+-- define a one-method class, give it two instances, then use it behind a `=>`
+class Weight t where
+  weight :: t -> Int
+
+instance Weight Bool where
+  weight flag = if flag then 1 else 0
+
+instance Weight Pitch where
+  weight p = semitones p
+
+-- `Weight t =>` constrains the dispatch — call sites must supply a Weight type
+pairWeight :: Weight t => t -> t -> Int
+pairWeight x y = weight x + weight y
+
+-- 103 (C4 + G4 semitones) + 1 (True + False) + 8 (topInt)
+main = pairWeight c' g' + pairWeight True False + topInt
