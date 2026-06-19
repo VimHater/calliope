@@ -55,6 +55,14 @@ MusicId control(Music& m, int instrument, MusicId child) {
     return control(m, instrument, std::string(), child);
 }
 
+MusicId control_gm(Music& m, int gm, MusicId child) {
+    MusicNode n;
+    n.kind = MusicKind::Control;
+    n.gm = gm;
+    n.left = child;
+    return add(m, n);
+}
+
 MusicId control_tempo(Music& m, int bpm, MusicId child) {
     MusicNode n;
     n.kind = MusicKind::Control;
@@ -79,6 +87,7 @@ MusicId rewrap_control(Music& m, const MusicNode& src, MusicId child) {
     n.kind = MusicKind::Control;
     n.instrument = src.instrument;
     n.sfz_path = src.sfz_path;
+    n.gm = src.gm;
     n.tempo = src.tempo;
     n.velocity = src.velocity;
     n.left = child;
@@ -153,7 +162,7 @@ bool equal(const Music& m, MusicId a, MusicId b) {
             return equal(m, na.left, nb.left) && equal(m, na.right, nb.right);
         case MusicKind::Control:
             return na.instrument == nb.instrument && na.sfz_path == nb.sfz_path &&
-                   na.tempo == nb.tempo && na.velocity == nb.velocity &&
+                   na.gm == nb.gm && na.tempo == nb.tempo && na.velocity == nb.velocity &&
                    equal(m, na.left, nb.left);
     }
     return false;
@@ -204,7 +213,7 @@ MusicId tie(Music& m, MusicId a, MusicId b, bool& ok) {
         }
         case MusicKind::Control:
             if (na.instrument != nb.instrument || na.sfz_path != nb.sfz_path ||
-                na.tempo != nb.tempo || na.velocity != nb.velocity) {
+                na.gm != nb.gm || na.tempo != nb.tempo || na.velocity != nb.velocity) {
                 ok = false;
                 return NoMusic;
             }
@@ -244,6 +253,7 @@ std::string show(const Music& m, MusicId id) {
                 return "vel(" + std::to_string(n.velocity) + ", " + show(m, n.left) + ")";
             std::string name;
             if (!n.sfz_path.empty()) name = "\"" + n.sfz_path + "\"";
+            else if (n.gm >= 0) name = "gm " + std::to_string(n.gm);
             else if (const instrument::Info* info = instrument::by_id(n.instrument))
                 name = info->name;
             else name = "?";

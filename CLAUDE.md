@@ -138,7 +138,9 @@ in (loaded units never shift the program's lines).
   `notePitch` / `noteDur`, `tuplet` (scales durations by m/n via
   `music::scale_dur`), `withInstrument` (wraps a phrase in a `Control` node —
   `music::control`; the stdlib's `onInstrument` is a thin wrapper), `sfz`
-  (`Str -> Instrument`, a custom-soundfont instrument from a `.sfz` path), and the
+  (`Str -> Instrument`, a custom-soundfont instrument from a `.sfz` path) and `gm`
+  (`Int -> Instrument`, a custom instrument from a raw GM program number — exports to
+  MIDI, unlike `sfz`), and the
   other `Control` axes `tempo` / `velocity` (`Int -> Music -> Music`). Notation carries durations on notes (`c'8`), rests (`r2`),
   and chords — a duration after `>` applies to every note (`<c e g>2`, via the
   parser encoding it in the `Chord` node's `extra`, applied by `music::set_dur`);
@@ -173,13 +175,16 @@ dynamics-by-name will follow). `Instrument` is a typed
 enum of builtin nullary constructors (`Cello`, `Flute`, … like the `Interval`
 constructors — `core/instrument.{hpp,cpp}` is the single name↔GM↔.sfz table); the
 stdlib `onInstrument :: Instrument -> Music -> Music` (over the `withInstrument`
-axiom) builds the node. A **custom soundfont** is `sfz :: Str -> Instrument` —
-`onInstrument (sfz "cello.sfz") phrase` — so the Control node carries *either* an
-enum id *or* a user `.sfz` path (relative paths resolve against the source file's
-dir; absolute used as-is). The IR carries only that abstract payload; each backend
-resolves it (MIDI → GM program + a channel per instrument, custom paths get a plain
-channel; audio → an SSO `.sfz`, the user's `.sfz`, or a placeholder GM SF2 via tsf
-when a patch is absent). `:+:`/`:=:` compose via a builtin single-parameter
+axiom) builds the node. **Custom instruments** outside the enum: `sfz :: Str ->
+Instrument` (`onInstrument (sfz "cello.sfz") phrase`) and `gm :: Int -> Instrument`
+(a raw GM program number) — both first-class values, so a user can `name = sfz "…"`
+/ `name = gm 24` and reuse it. So the Control node's instrument axis carries one of
+*enum id* / *user `.sfz` path* / *raw `gm` program* (relative `.sfz` paths resolve
+against the source file's dir; absolute used as-is). The IR carries only that
+abstract payload; each backend resolves it (MIDI → a channel per instrument with a
+GM program-change for enum / `gm` voices, `.sfz` gets a plain default channel;
+audio → an SSO `.sfz`, the user's `.sfz`, or a placeholder GM SF2 via tsf — by the
+instrument's GM number, or `gm`'s number directly — when a patch is absent). `:+:`/`:=:` compose via a builtin single-parameter
 class **`Phrase`** (instances `Pitch` and `Music`): `(:+:) :: Phrase t => Phrase u
 => t -> u -> Music`. A bare `Pitch` operand lifts to a one-note phrase, so `c' :+:
 d'` is `Music`, and a function over `:+:` stays polymorphic (`fn x = x :+: x` has

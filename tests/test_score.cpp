@@ -87,6 +87,15 @@ void run_score_tests() {
         CHECK_EQ_STR(ns[1].sfz_path.c_str(), "b.sfz");
     }
 
+    // A raw-GM Control stamps its program onto the notes (instrument -1, path "").
+    {
+        music::Music m;
+        music::MusicId g = music::control_gm(m, 42, music::note(m, pitch(0, 0, 4), q));
+        std::vector<backend::TimedNote> ns = backend::flatten(m, g);
+        CHECK(ns.size() == 1);
+        CHECK(ns[0].gm == 42 && ns[0].instrument == -1 && ns[0].sfz_path.empty());
+    }
+
     // A tempo Control rescales the seconds of its subtree; velocity stamps notes.
     {
         music::Music m;

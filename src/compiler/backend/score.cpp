@@ -10,6 +10,7 @@ namespace {
 struct Ctx {
     int inst = -1;            // named-instrument id (-1 = none/custom)
     std::string path;         // custom .sfz path ("" = none)
+    int gm = -1;              // raw GM program number (-1 = none)
     int bpm = 120;            // tempo
     int velocity = 80;        // note-on velocity
 };
@@ -32,7 +33,7 @@ Rational collect(const music::Music& m, music::MusicId id, Rational off,
             if (key < 0) key = 0;
             if (key > 127) key = 127;
             Rational dur = to_seconds(n.dur, cx.bpm);
-            out.push_back({off, key, dur, cx.inst, cx.path, cx.velocity});
+            out.push_back({off, key, dur, cx.inst, cx.path, cx.gm, cx.velocity});
             return dur;
         }
         case music::MusicKind::Rest:
@@ -50,7 +51,13 @@ Rational collect(const music::Music& m, music::MusicId id, Rational off,
         case music::MusicKind::Control: {
             // each Control overrides one axis of the context for its subtree
             Ctx inner = cx;
-            if (n.instrument >= 0 || !n.sfz_path.empty()) { inner.inst = n.instrument; inner.path = n.sfz_path; }
+            // any instrument-axis Control (named / custom .sfz / raw GM) replaces the
+            // whole voice identity for its subtree
+            if (n.instrument >= 0 || !n.sfz_path.empty() || n.gm >= 0) {
+                inner.inst = n.instrument;
+                inner.path = n.sfz_path;
+                inner.gm = n.gm;
+            }
             if (n.tempo >= 0) inner.bpm = n.tempo;
             if (n.velocity >= 0) inner.velocity = n.velocity;
             return collect(m, n.left, off, inner, out);

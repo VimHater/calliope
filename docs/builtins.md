@@ -104,6 +104,7 @@ predicates, and accessors let the prelude define structural transforms (`invert`
 | `tuplet` | `Int -> Int -> Music -> Music` | `tuplet n m` fits n notes in the time of m (scales every duration by m/n); a triplet is `tuplet 3 2` |
 | `withInstrument` | `Instrument -> Music -> Music` | wrap a phrase in a `Control` node assigning an instrument (stdlib `onInstrument` is a thin alias) |
 | `sfz` | `Str -> Instrument` | a custom instrument from a `.sfz` file path (relative to the source file, or absolute) |
+| `gm` | `Int -> Instrument` | a custom instrument from a raw General-MIDI program number (0..127) |
 
 ### Instruments
 
@@ -120,16 +121,26 @@ General-MIDI program (on its own channel) and the audio backend plays the matchi
 Sonatina Symphonic Orchestra `.sfz` — or a placeholder GM SF2 if that patch is
 missing. Notes outside any `withInstrument` keep the default voice.
 
-For a soundfont not in the enum, `sfz` takes a file path:
+For a voice not in the enum there are two custom-instrument constructors, both
+producing an ordinary `Instrument` value — so bind a name and reuse it:
 
 ```
-onInstrument (sfz "instruments/my-cello.sfz") subject   -- a custom .sfz
+myCello = sfz "instruments/my-cello.sfz"   -- a custom .sfz sampler patch
+nylon   = gm 24                            -- a raw General-MIDI program number
+onInstrument myCello subject
+onInstrument nylon   bass
 ```
 
-A relative path resolves against the source `.cal` file's directory (so a project
-and its soundfonts travel together); an absolute path is used as-is. The audio
-backend plays it through sfizz; MIDI has no program mapping for a custom soundfont,
-so it stays on a plain channel (default voice).
+(Naming gotcha: a binding can't be spelled like a pitch — `cello`/`e4` are reserved
+notation — so use `myCello`, `nylon`, `cello2`, …)
+
+- **`sfz "<path>"`** — a relative path resolves against the source `.cal` file's
+  directory (so a project and its soundfonts travel together); an absolute path is
+  used as-is. The audio backend plays it through sfizz; **MIDI has no program mapping
+  for a `.sfz`**, so it stays on a plain channel (default voice).
+- **`gm <n>`** — a General-MIDI program number. MIDI emits that program-change
+  directly (its own channel); audio plays it through the fallback GM soundfont. Use
+  `gm` when you want a named voice outside the enum that still exports cleanly to MIDI.
 
 ### Tempo & velocity
 

@@ -53,7 +53,7 @@ enum BuiltinId {
     B_ISNOTE, B_ISREST, B_ISSEQ, B_ISPAR,
     B_MLEFT, B_MRIGHT,
     B_TUPLET,
-    B_WITHINST, B_SFZ,
+    B_WITHINST, B_SFZ, B_GM,
     B_TEMPO, B_VELOCITY,
 };
 
@@ -79,6 +79,7 @@ const BuiltinInfo kBuiltins[] = {
     {"tuplet", B_TUPLET, 3},
     {"withInstrument", B_WITHINST, 2},
     {"sfz", B_SFZ, 1},
+    {"gm", B_GM, 1},
     {"tempo", B_TEMPO, 2},
     {"velocity", B_VELOCITY, 2},
 };
@@ -309,8 +310,15 @@ Value call_builtin(Interp& I, int id, std::vector<Value>& a) {
                 return a[1];
             }
             const std::string& name = a[0].str;
-            int id = instrument::id_of(name);
             music::MusicId child = to_music(I, a[1]);
+            // a raw GM-program instrument (`gm n`) carries its number in items[0]
+            if (name == "#gm") {
+                int prog = a[0].items.empty() ? 0 : static_cast<int>(a[0].items[0].i);
+                if (prog < 0) prog = 0;
+                if (prog > 127) prog = 127;
+                return music_value(I, music::control_gm(*I.music, prog, child));
+            }
+            int id = instrument::id_of(name);
             if (id >= 0) return music_value(I, music::control(*I.music, id, child));
             return music_value(I, music::control(*I.music, -1, name, child)); // custom .sfz
         }
@@ -321,6 +329,13 @@ Value call_builtin(Interp& I, int id, std::vector<Value>& a) {
                 return v_unit();
             }
             return v_con(a[0].str, {});
+        // ---- gm: lift a GM program number into a (custom) Instrument value --
+        case B_GM:
+            if (a[0].kind != ValueKind::Int) {
+                I.errors.push_back("gm expects a program number");
+                return v_unit();
+            }
+            return v_con("#gm", {a[0]});
         // ---- tempo / velocity: wrap a phrase in a Control node --------------
         case B_TEMPO: {
             if (a[0].i <= 0) { I.errors.push_back("tempo must be a positive bpm"); return a[1]; }

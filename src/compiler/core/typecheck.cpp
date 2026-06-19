@@ -585,6 +585,8 @@ void seed_builtins(Checker& ck, Env& env) {
                                        t_arrow(c, t_con0(c, "Music"), t_con0(c, "Music"))));
     // sfz "path" — lift a .sfz file path into a custom Instrument value.
     add_mono("sfz", t_arrow(c, t_con0(c, "Str"), t_con0(c, "Instrument")));
+    // gm n — lift a General-MIDI program number into a custom Instrument value.
+    add_mono("gm", t_arrow(c, t_con0(c, "Int"), t_con0(c, "Instrument")));
     // tempo bpm / velocity v — set a phrase's tempo / note velocity (Control nodes).
     add_mono("tempo", t_arrow(c, t_con0(c, "Int"),
                               t_arrow(c, t_con0(c, "Music"), t_con0(c, "Music"))));

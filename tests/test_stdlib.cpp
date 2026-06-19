@@ -179,6 +179,16 @@ void run_stdlib_tests() {
                      "inst(\"cello.sfz\", ((C3:1/4 :+: D3:1/4) :+: E3:1/4))");
     }
 
+    // a raw GM-program instrument: gm n is an Instrument; onInstrument carries it.
+    {
+        const std::string prog = "main = onInstrument (gm 42) (c d e)";
+        CHECK(!type_errors(prog));
+        CHECK_EQ_STR(type_of(prog, "main"), "Music");
+        eval::Value v = run(prog);
+        CHECK_EQ_STR(eval::show_value(v),
+                     "inst(gm 42, ((C3:1/4 :+: D3:1/4) :+: E3:1/4))");
+    }
+
     // tempo / velocity build Control nodes (shown as tempo(...)/vel(...)).
     {
         eval::Value t = run("main = tempo 90 (c d)");

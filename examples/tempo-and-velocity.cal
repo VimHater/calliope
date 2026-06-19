@@ -1,0 +1,33 @@
+-- Tempo and dynamics: `tempo` and `velocity` wrap a phrase and apply within it.
+--
+--   tempo <bpm> phrase      -- play `phrase` at that many beats per minute
+--   velocity <0..127> phrase -- set the note-on velocity (loudness) of `phrase`
+--
+-- Both are Control nodes, like `onInstrument`: an inner wrapper overrides an outer
+-- one, and an un-wrapped phrase keeps the defaults (120 bpm, velocity 80). Tempo is
+-- resolved into real time, so two phrases under `par` can even run at once at
+-- DIFFERENT tempi.
+--
+--   calliope examples/tempo-and-velocity.cal               -- print the Music IR
+--   calliope examples/tempo-and-velocity.cal -o out.mid     -- MIDI
+--   calliope examples/tempo-and-velocity.cal -o out.wav     -- audio
+--
+-- (In MIDI the notated tempo stays 120; a slower tempo shows up as proportionally
+-- longer notes, so the timing is correct even though a DAW reads 120 bpm.)
+
+#load "prelude"
+
+theme :: Music
+theme = c' e' g' c''
+
+-- a brisk, loud statement of the theme
+bright :: Music
+bright = velocity 110 (tempo 144 theme)
+
+-- the same theme, slow and soft underneath
+soft :: Music
+soft = velocity 45 (tempo 72 (transpose P8 theme))
+
+-- a fast melody over a slow drone — two tempi at once
+main :: Music
+main = par bright soft

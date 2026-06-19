@@ -64,4 +64,16 @@ void run_midi_tests() {
         if (b2[i] == 0xC0 && b2[i + 1] == 0x2A) { has_prog = true; break; }
     CHECK(has_prog);
     std::remove(p2.c_str());
+
+    // a raw `gm n` Control emits a program-change for that exact GM number.
+    music::Music m3;
+    music::MusicId raw = music::control_gm(m3, 19, music::note(m3, pitch(0, 0, 4), rational(1, 4)));
+    const std::string p3 = "test_out_gm.mid";
+    CHECK(backend::write_midi(m3, raw, p3, err));
+    std::vector<unsigned char> b3 = read_bytes(p3);
+    bool has_gm = false;
+    for (std::size_t i = 0; i + 1 < b3.size(); i++)
+        if (b3[i] == 0xC0 && b3[i + 1] == 0x13) { has_gm = true; break; } // GM 19 = 0x13
+    CHECK(has_gm);
+    std::remove(p3.c_str());
 }

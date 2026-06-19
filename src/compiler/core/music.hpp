@@ -22,7 +22,8 @@
 // `Control` is the `Modify` family (spec §8). It wraps a single child (in `left`)
 // and carries exactly one control payload along one axis (the others stay unset, so
 // an enclosing Control still governs them):
-//   • instrument — a named-instrument id, or a user `sfz_path` (then instrument=-1)
+//   • instrument — a named-instrument id, a user `sfz_path`, or a raw `gm` program
+//                  number (`gm "<n>"`); for the latter two instrument stays -1
 //   • tempo      — beats per minute (`tempo` >= 0 means set)
 //   • velocity   — note-on velocity 0..127 (`velocity` >= 0 means set)
 // The payload stays abstract here; the flatten seam / backends resolve it. Note
@@ -43,6 +44,7 @@ struct MusicNode {
     MusicId right = NoMusic;     // Seq / Par
     int instrument = -1;         // Control: named-instrument id (-1 = none / custom)
     std::string sfz_path;        // Control: user-supplied .sfz path ("" = named/none)
+    int gm = -1;                 // Control: raw GM program number (-1 = unset)
     int tempo = -1;              // Control: beats per minute (-1 = unset)
     int velocity = -1;           // Control: note-on velocity 0..127 (-1 = unset)
 };
@@ -58,6 +60,7 @@ MusicId seq(Music& m, MusicId a, MusicId b);
 MusicId par(Music& m, MusicId a, MusicId b);
 MusicId control(Music& m, int instrument, std::string sfz_path, MusicId child);
 MusicId control(Music& m, int instrument, MusicId child); // sfz_path = "" (named)
+MusicId control_gm(Music& m, int gm, MusicId child);      // raw GM program number
 MusicId control_tempo(Music& m, int bpm, MusicId child);
 MusicId control_velocity(Music& m, int velocity, MusicId child);
 

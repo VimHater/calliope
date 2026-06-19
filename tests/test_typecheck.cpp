@@ -132,6 +132,10 @@ void run_typecheck_tests() {
     CHECK_EQ_STR(type_of("main = sfz \"x.sfz\"", "main"), "Instrument");
     CHECK_EQ_STR(type_of("main = withInstrument (sfz \"x.sfz\") (c d e)", "main"), "Music");
     CHECK(has_type_error("main = sfz 5")); // Str expected, Int given
+    // gm lifts a GM program number into a custom Instrument
+    CHECK_EQ_STR(type_of("main = gm 42", "main"), "Instrument");
+    CHECK_EQ_STR(type_of("main = withInstrument (gm 42) (c d e)", "main"), "Music");
+    CHECK(has_type_error("main = gm \"x\"")); // Int expected, Str given
 
     // tempo / velocity wrap a phrase given an Int
     CHECK_EQ_STR(type_of("main = tempo 90 (c d e)", "main"), "Music");

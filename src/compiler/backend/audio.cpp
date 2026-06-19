@@ -151,14 +151,18 @@ std::vector<float> render_tsf(const std::string& sf2, int gm, const std::vector<
 
 // Resolve + render one instrument group: sfizz if its .sfz exists, else the tsf
 // fallback. `inst` is a named-instrument id (-1 = none/custom); a non-empty `path`
-// is a user `sfz "..."`. Empty result means the group was skipped (warning printed).
-std::vector<float> render_group(int inst, const std::string& path,
+// is a user `sfz "..."`; `gmprog >= 0` is a raw `gm n` (no .sfz — straight to tsf).
+// Empty result means the group was skipped (warning printed).
+std::vector<float> render_group(int inst, const std::string& path, int gmprog,
                                 const std::vector<SampleEv>& evs, long long last_end,
                                 const AudioOptions& opt) {
     std::string sfz;
     int gm = 0;
     std::string label;
-    if (!path.empty()) {
+    if (gmprog >= 0) {
+        gm = gmprog;                 // raw GM program: no sampler, tsf only
+        label = "gm " + std::to_string(gmprog);
+    } else if (!path.empty()) {
         sfz = resolve(opt.base_dir, path); // custom user soundfont
         label = "\"" + path + "\"";
     } else if (inst < 0) {
@@ -199,8 +203,10 @@ bool write_wav(const music::Music& m, music::MusicId root,
     // stable, deterministic order.
     std::map<std::string, std::vector<TimedNote>> groups;
     for (const TimedNote& n : notes) {
-        std::string key = n.sfz_path.empty() ? ("#" + std::to_string(n.instrument))
-                                             : ("@" + n.sfz_path);
+        std::string key;
+        if (!n.sfz_path.empty()) key = "@" + n.sfz_path;
+        else if (n.gm >= 0)      key = "%" + std::to_string(n.gm);
+        else                     key = "#" + std::to_string(n.instrument);
         groups[key].push_back(n);
     }
 
@@ -209,7 +215,7 @@ bool write_wav(const music::Music& m, music::MusicId root,
         const TimedNote& rep = g.second.front(); // all share instrument + sfz_path
         long long last_end = 0;
         std::vector<SampleEv> evs = events_of(g.second, opt, last_end);
-        std::vector<float> buf = render_group(rep.instrument, rep.sfz_path, evs, last_end, opt);
+        std::vector<float> buf = render_group(rep.instrument, rep.sfz_path, rep.gm, evs, last_end, opt);
         if (buf.size() > master.size()) master.resize(buf.size(), 0.0f);
         for (std::size_t i = 0; i < buf.size(); ++i) master[i] += buf[i];
     }

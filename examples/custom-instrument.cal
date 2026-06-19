@@ -1,27 +1,44 @@
--- Custom soundfonts: `sfz "<path>"` is an Instrument, like `Cello` or `Flute`,
--- but loaded from a .sfz file you point at instead of the built-in enum.
+-- Custom instruments: two ways past the built-in `Instrument` enum.
 --
---   onInstrument (sfz "path/to/patch.sfz") phrase
+--   sfz "<path>"  -- load a .sfz sampler patch (audio only)
+--   gm <n>        -- pick a raw General-MIDI program number 0..127
 --
--- A relative path resolves against THIS file's directory (so the example runs from
--- any working directory); an absolute path is used as-is. Here we borrow an .sfz
--- from the vendored Sonatina Symphonic Orchestra under third_party/.
+-- Both are first-class `Instrument` values, so bind a name to one and reuse it:
+--
+--   harp = sfz "path/to/patch.sfz"
+--   onInstrument harp phrase
+--
+-- A relative .sfz path resolves against THIS file's directory (so the example runs
+-- from any working directory); an absolute path is used as-is. Here we borrow an
+-- .sfz from the vendored Sonatina Symphonic Orchestra under third_party/.
 --
 --   calliope examples/custom-instrument.cal                -- print the Music IR
 --   calliope examples/custom-instrument.cal -o out.wav      -- render (audio)
+--   calliope examples/custom-instrument.cal -o out.mid      -- render (MIDI)
 --
--- Audio plays the custom .sfz through sfizz. (MIDI has no GM mapping for a custom
--- soundfont, so `-o out.mid` keeps it on a plain channel / default voice.)
+-- Backends differ:
+--   * sfz  -- audio plays the .sfz through sfizz; MIDI has no GM mapping for it, so
+--            it stays on a plain channel (default voice).
+--   * gm   -- MIDI emits that program-change directly; audio plays it through the
+--            fallback GM soundfont. Use `gm` for a named voice that also exports
+--            cleanly to MIDI.
 
 #load "prelude"
 
+-- a .sfz sampler patch (audio-only)
 harp :: Instrument
 harp = sfz "../third_party/soundfonts/sso/Sonatina Symphonic Orchestra/Concert Harp.sfz"
 
-phrase :: Music
-phrase = c' e' g' e' c' e' g' e'
+-- a raw GM voice (24 = nylon guitar); works in MIDI and audio
+guitar :: Instrument
+guitar = gm 24
 
--- the harp arpeggio under a flute line from the built-in enum
+arp :: Music
+arp = c' e' g' e' c' e' g' e'
+
+bass :: Music
+bass = c, g, c, g,
+
+-- harp arpeggio over a GM guitar bass line
 main :: Music
-main = par (onInstrument harp phrase)
-           (onInstrument Flute (g' a' g' e'))
+main = par (onInstrument harp arp) (onInstrument guitar bass)

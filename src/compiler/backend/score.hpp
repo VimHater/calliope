@@ -26,6 +26,7 @@ struct TimedNote {
     Rational dur;           // seconds
     int instrument = -1;    // named-instrument id from the enclosing Control (-1 = none/custom)
     std::string sfz_path;   // custom .sfz path from the enclosing Control ("" = named/none)
+    int gm = -1;            // raw GM program number from the enclosing Control (-1 = none)
     int velocity = 80;      // note-on velocity 0..127 from the enclosing Control
 };
 
