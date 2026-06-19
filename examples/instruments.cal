@@ -1,0 +1,19 @@
+-- Assigning instruments to phrases.
+--
+-- `onInstrument` tags a sub-phrase with a typed Instrument; each backend sounds it
+-- on that voice. Here the cellos carry a bass line under a flute melody.
+--
+--   calliope examples/instruments.cal                 -- print the Music IR
+--   calliope examples/instruments.cal -o out.mid       -- MIDI (one channel each)
+--   calliope examples/instruments.cal -o out.wav       -- audio (SSO cello + flute)
+
+#load "prelude"
+
+bass :: Music
+bass = c d e c
+
+melody :: Music
+melody = g' a' g' e'
+
+main :: Music
+main = par (onInstrument Cello bass) (onInstrument Flute melody)
