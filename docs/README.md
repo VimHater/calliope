@@ -40,16 +40,28 @@ cmake -S . -B build && cmake --build build
 ### Compiler — `calliope`
 
 ```sh
-./build/calliope path/to/file.cal          # print the Music tree of `main` to stdout
-./build/calliope --emit midi file.cal      # other backends: not implemented yet
+./build/calliope file.cal                  # print the Music tree of `main` to stdout
+./build/calliope -o song.mid file.cal      # compile to a MIDI file (backend from extension)
+./build/calliope -o song.ir file.cal       # write the Music IR text to a file
+./build/calliope --emit midi file.cal      # force MIDI; output name derived (file.mid)
 ./build/calliope --dump types file.cal     # debug: also dump tokens / ast / types
 ```
 
 ```
 usage: calliope [options] <file.cal>
-  --emit <fmt>    ir (default) | midi | wav | mp3 | mp4 | musicxml
+  -o <file>       write output to <file>; backend chosen by extension
+                  (.mid/.midi = MIDI, .ir = Music IR text)
+  --emit <fmt>    force the backend: ir | midi  (overrides the extension)
+  --soundfont <f> soundfont for audio backends (reserved; unused for now)
   --dump <what>   tokens | ast | types   (repeatable)
 ```
+
+With no `-o` and no `--emit`, the Music IR is printed to stdout. The backend is
+otherwise chosen by the `-o` extension (or forced with `--emit`); a `--emit midi`
+without `-o` derives the output name from the input (`file.cal` → `file.mid`).
+Backends implemented so far: **ir** (Music IR text) and **midi** (a format-0
+Standard MIDI File). `main` must be `Music` (a bare `Pitch` is lifted to one note)
+for the MIDI backend. The audio / MusicXML backends are still to come.
 
 A program is a set of bindings; `main` is the entry point and is expected to have
 type `Music` (any value type works while experimenting). To use the standard
@@ -61,9 +73,9 @@ library, a file must load it explicitly with a directive:
 
 (`#load "prelude"` resolves to the bundled standard library; other names are read
 as file paths. Each loaded file is parsed as its own unit, so error line numbers
-stay relative to the file they occur in.) Today only `--emit ir` is wired up — it
-prints the evaluated Music tree; the audio / MIDI / MusicXML backends are stubs
-that report "not implemented".
+stay relative to the file they occur in.) The `ir` and `midi` backends are wired
+up (see the options above); the audio / MusicXML backends still report "not
+implemented".
 
 ### Interpreter — `calliopei`
 

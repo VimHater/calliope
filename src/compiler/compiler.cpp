@@ -1,110 +1,66 @@
-#include "core/ast.hpp"
 #include "core/driver.hpp"
-#include "core/eval.hpp"
-#include "core/lexer.hpp"
-#include "core/parser.hpp"
+#include "helper.hpp"
 
 #include <cstdio>
 #include <cstring>
-#include <fstream>
-#include <sstream>
 #include <string>
 
-// Calliope compiler driver — an I/O shell around calliope::driver.
+// Calliope compiler CLI (`calliope`) — a thin I/O shell over calliope::driver.
 //
 //   calliope [options] <file.cal>
 //
-// Reads a program (and the standard-library prelude), hands them to the driver
-// API, and writes the result. Today only the Music IR backend is wired up (it
-// prints the evaluated IR to stdout); the audio / MIDI / engraving backends are
-// stubs until the score IR + synth layers land.
+// Reads a program, hands it to the driver, and writes the result through the
+// chosen backend. All the real work lives in core/driver and cli (helper.{hpp,cpp}).
 
 namespace {
 
-std::string read_file(const char* path) {
-    std::ifstream f(path, std::ios::binary);
-    if (!f) return std::string();
-    std::stringstream ss;
-    ss << f.rdbuf();
-    return ss.str();
-}
-
-const char* prelude_path() {
-#ifdef CALLIOPE_PRELUDE_PATH
-    return CALLIOPE_PRELUDE_PATH;
-#else
-    return "";
-#endif
-}
-
-// Output backends. `ir` is the only one implemented; the rest are placeholders
-// for the score-IR-driven pipeline (spec §13 / O9).
-enum class Emit { Ir, Midi, Wav, Mp3, Mp4, MusicXml };
-
-bool parse_emit(const char* s, Emit& out) {
-    if (!std::strcmp(s, "ir"))       { out = Emit::Ir;       return true; }
-    if (!std::strcmp(s, "midi"))     { out = Emit::Midi;     return true; }
-    if (!std::strcmp(s, "wav"))      { out = Emit::Wav;      return true; }
-    if (!std::strcmp(s, "mp3"))      { out = Emit::Mp3;      return true; }
-    if (!std::strcmp(s, "mp4"))      { out = Emit::Mp4;      return true; }
-    if (!std::strcmp(s, "musicxml")) { out = Emit::MusicXml; return true; }
-    return false;
-}
-
-const char* emit_name(Emit e) {
-    switch (e) {
-        case Emit::Ir:       return "ir";
-        case Emit::Midi:     return "midi";
-        case Emit::Wav:      return "wav";
-        case Emit::Mp3:      return "mp3";
-        case Emit::Mp4:      return "mp4";
-        case Emit::MusicXml: return "musicxml";
-    }
-    return "?";
-}
+using calliope::cli::Emit;
 
 void usage(const char* prog) {
     std::fprintf(stderr,
         "usage: %s [options] <file.cal>\n"
         "\n"
-        "  --emit <fmt>    output format: ir (default), midi, wav, mp3, mp4, musicxml\n"
+        "  -o <file>       write output to <file>; the backend is chosen by its\n"
+        "                  extension (.mid/.midi = MIDI, .ir = Music IR text)\n"
+        "  --emit <fmt>    force the backend: ir | midi (overrides the extension)\n"
+        "  --soundfont <f> soundfont for audio backends (reserved; unused for now)\n"
         "  --dump <what>   debug dump to stdout: tokens, ast, types (repeatable)\n"
         "  -h, --help      show this help\n"
         "\n"
-        "Only 'ir' is implemented; it prints the evaluated Music IR to stdout.\n",
+        "With no -o and no --emit, the Music IR is printed to stdout.\n"
+        "Backends implemented so far: ir, midi.\n",
         prog);
-}
-
-// Debug dumps reflect the user program alone (the prelude would drown them).
-void dump_tokens(const std::string& src) {
-    std::printf("== tokens ==\n");
-    for (const calliope::Token& t : calliope::lex::tokenize(src))
-        std::printf("%3d:%-3d %-11s '%.*s'\n", t.line, t.col,
-                    calliope::token_kind_name(t.kind),
-                    static_cast<int>(t.text.size()), t.text.data());
-}
-
-void dump_ast(const std::string& src) {
-    calliope::ast::Ast a = calliope::parse::parse_program(calliope::lex::tokenize(src), nullptr);
-    std::printf("== ast ==\n");
-    calliope::ast::ast_print(a, a.root, 0);
 }
 
 } // namespace
 
 int main(int argc, char** argv) {
     Emit emit = Emit::Ir;
+    bool emit_given = false;
     bool want_tokens = false, want_ast = false, want_types = false;
     const char* input = nullptr;
+    std::string out_path;
+    std::string soundfont; // reserved for audio backends
 
     for (int i = 1; i < argc; i++) {
         const char* a = argv[i];
         if (!std::strcmp(a, "-h") || !std::strcmp(a, "--help")) { usage(argv[0]); return 0; }
+        if (!std::strcmp(a, "-o")) {
+            if (++i >= argc) { std::fprintf(stderr, "error: -o needs a file path\n"); return 2; }
+            out_path = argv[i];
+            continue;
+        }
         if (!std::strcmp(a, "--emit")) {
-            if (++i >= argc || !parse_emit(argv[i], emit)) {
+            if (++i >= argc || !calliope::cli::parse_emit(argv[i], emit)) {
                 std::fprintf(stderr, "error: --emit needs one of ir|midi|wav|mp3|mp4|musicxml\n");
                 return 2;
             }
+            emit_given = true;
+            continue;
+        }
+        if (!std::strcmp(a, "--soundfont")) {
+            if (++i >= argc) { std::fprintf(stderr, "error: --soundfont needs a file path\n"); return 2; }
+            soundfont = argv[i];
             continue;
         }
         if (!std::strcmp(a, "--dump")) {
@@ -121,52 +77,49 @@ int main(int argc, char** argv) {
     }
 
     if (!input) { usage(argv[0]); return 2; }
+    (void)soundfont; // reserved: consumed once audio backends exist
 
-    std::string src = read_file(input);
+    std::string src = calliope::cli::read_file(input);
     if (src.empty()) {
         std::fprintf(stderr, "error: cannot read '%s'\n", input);
         return 2;
     }
 
-    if (want_tokens) dump_tokens(src);
-    if (want_ast)    dump_ast(src);
+    if (want_tokens) calliope::cli::dump_tokens(src);
+    if (want_ast)    calliope::cli::dump_ast(src);
 
     // Files do not get the prelude automatically — they must `#load "prelude"`.
     // Relative `#load` paths resolve against the file's own directory.
     std::string base = calliope::driver::directory_of(input);
-    calliope::driver::LoadOptions opts{prelude_path(), base, false};
+    calliope::driver::LoadOptions opts{calliope::cli::prelude_path(), base, false};
     calliope::driver::Compilation c;
     calliope::driver::compile(src, opts, c);
 
-    if (want_types) {
-        std::printf("== types ==\n");
-        if (!c.main_type.empty()) std::printf("main :: %s\n", c.main_type.c_str());
-    }
+    if (want_types && !c.main_type.empty())
+        std::printf("== types ==\nmain :: %s\n", c.main_type.c_str());
 
-    for (const std::string& e : c.parse_errors) {
-        std::fprintf(stderr, "parse error: %s\n", e.c_str());
-    }
-    for (const std::string& e : c.type_errors) {
-        std::fprintf(stderr, "type error: %s\n", e.c_str());
-    }
-    for (const std::string& e : c.runtime_errors) {
-        std::fprintf(stderr, "runtime error: %s\n", e.c_str());
-    }
+    calliope::cli::print_errors(c);
 
     if (!c.has_main) {
         std::fprintf(stderr, "error: no 'main' to compile\n");
         return 1;
     }
 
-    if (emit != Emit::Ir) {
-        std::fprintf(stderr,
-            "error: emitting '%s' is not implemented yet — the score IR and synth\n"
-            "       backends are still to come. Use '--emit ir' for now.\n",
-            emit_name(emit));
-        return 1;
+    // Choose the backend: an explicit --emit wins; otherwise infer from the -o
+    // extension; with neither, print the Music IR to stdout.
+    if (!emit_given) {
+        if (!out_path.empty()) {
+            std::string e = calliope::cli::ext_of(out_path);
+            if (!calliope::cli::emit_from_ext(e, emit)) {
+                std::fprintf(stderr, "error: unknown output extension '.%s' (use .mid or .ir)\n", e.c_str());
+                return 2;
+            }
+        } else {
+            emit = Emit::Ir;
+        }
     }
+    // Binary backends need a destination; default it from the input name.
+    if (out_path.empty() && emit == Emit::Midi) out_path = calliope::cli::replace_ext(input, ".mid");
 
-    // The only wired backend: print the evaluated Music IR.
-    std::printf("%s\n", calliope::eval::show_value(c.main_value).c_str());
-    return calliope::driver::ok(c) ? 0 : 1;
+    return calliope::cli::emit_output(c, emit, out_path);
 }

@@ -23,10 +23,12 @@ set(CALLIOPE_CORE
     src/compiler/core/eval.cpp
     src/compiler/core/typecheck.cpp
     src/compiler/core/driver.cpp
+    src/compiler/backend/midi.cpp
 )
 
 add_executable(calliope
     src/compiler/compiler.cpp
+    src/compiler/helper.cpp
     ${CALLIOPE_CORE}
 )
 
@@ -47,6 +49,7 @@ endif()
 # --- interpreter: runs a file or starts a REPL ----------------------------
 add_executable(calliopei
     src/compiler/calliopei.cpp
+    src/compiler/helper.cpp
     ${CALLIOPE_CORE}
 )
 target_include_directories(calliopei PRIVATE src/compiler)
@@ -72,11 +75,12 @@ add_executable(calliope_tests
     tests/test_typecheck.cpp
     tests/test_stdlib.cpp
     tests/test_driver.cpp
+    tests/test_midi.cpp
     tests/test_main.cpp
     ${CALLIOPE_CORE}
 )
 
-target_include_directories(calliope_tests PRIVATE src/compiler/core tests)
+target_include_directories(calliope_tests PRIVATE src/compiler src/compiler/core tests)
 target_compile_definitions(calliope_tests PRIVATE
     CALLIOPE_PRELUDE_PATH="${CALLIOPE_STDLIB_DIR}/prelude.cal")
 

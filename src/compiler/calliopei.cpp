@@ -1,10 +1,9 @@
 #include "core/driver.hpp"
 #include "core/eval.hpp"
+#include "helper.hpp"
 
 #include <cstdio>
-#include <fstream>
 #include <iostream>
-#include <sstream>
 #include <string>
 #include <vector>
 
@@ -24,42 +23,24 @@
 
 namespace {
 
-const char* prelude_path() {
-#ifdef CALLIOPE_PRELUDE_PATH
-    return CALLIOPE_PRELUDE_PATH;
-#else
-    return "";
-#endif
-}
-
-std::string read_file(const char* path) {
-    std::ifstream f(path, std::ios::binary);
-    if (!f) return std::string();
-    std::stringstream ss;
-    ss << f.rdbuf();
-    return ss.str();
-}
-
 // Load options for the REPL: prelude preloaded, relative #load paths against cwd.
 calliope::driver::LoadOptions repl_opts() {
-    return calliope::driver::LoadOptions{prelude_path(), "", /*preload=*/true};
+    return calliope::driver::LoadOptions{calliope::cli::prelude_path(), "", /*preload=*/true};
 }
 
 // Run a whole file: evaluate `main` and print its value (the Music IR). The file
 // is responsible for `#load`-ing the prelude if it wants the standard library.
 int run_file(const char* path) {
-    std::string src = read_file(path);
+    std::string src = calliope::cli::read_file(path);
     if (src.empty()) {
         std::fprintf(stderr, "error: cannot read '%s'\n", path);
         return 2;
     }
     std::string base = calliope::driver::directory_of(path);
-    calliope::driver::LoadOptions opts{prelude_path(), base, false};
+    calliope::driver::LoadOptions opts{calliope::cli::prelude_path(), base, false};
     calliope::driver::Compilation c;
     calliope::driver::compile(src, opts, c);
-    for (const std::string& e : c.parse_errors)   std::fprintf(stderr, "parse error: %s\n", e.c_str());
-    for (const std::string& e : c.type_errors)    std::fprintf(stderr, "type error: %s\n", e.c_str());
-    for (const std::string& e : c.runtime_errors) std::fprintf(stderr, "runtime error: %s\n", e.c_str());
+    calliope::cli::print_errors(c);
     if (!c.has_main) {
         std::fprintf(stderr, "error: no 'main' to run\n");
         return 1;
