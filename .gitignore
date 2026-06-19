@@ -10,6 +10,12 @@ calliope_tests
 *.dylib
 *.dll
 *.exe
+*.mxl
+*.musicxml
+*.mid
+*.wav
+*.mp4
+*.mp3
 
 *.swp
 *~

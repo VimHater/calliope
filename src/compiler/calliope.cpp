@@ -21,14 +21,15 @@ void usage(const char* prog) {
         "usage: %s [options] <file.cal>\n"
         "\n"
         "  -o <file>       write output to <file>; the backend is chosen by its\n"
-        "                  extension (.mid/.midi = MIDI, .ir = Music IR text)\n"
-        "  --emit <fmt>    force the backend: ir | midi (overrides the extension)\n"
-        "  --soundfont <f> soundfont for audio backends (reserved; unused for now)\n"
+        "                  extension (.mid/.midi = MIDI, .wav = audio, .ir = Music IR)\n"
+        "  --emit <fmt>    force the backend: ir | midi | wav (overrides the extension)\n"
+        "  --soundfont <f> .sfz instrument for the audio (wav) backend\n"
+        "                  (default: the bundled SSO Grand Piano)\n"
         "  --dump <what>   debug dump to stdout: tokens, ast, types (repeatable)\n"
         "  -h, --help      show this help\n"
         "\n"
         "With no -o and no --emit, the Music IR is printed to stdout.\n"
-        "Backends implemented so far: ir, midi.\n",
+        "Backends implemented so far: ir, midi, wav.\n",
         prog);
 }
 
@@ -77,7 +78,6 @@ int main(int argc, char** argv) {
     }
 
     if (!input) { usage(argv[0]); return 2; }
-    (void)soundfont; // reserved: consumed once audio backends exist
 
     std::string src = calliope::cli::read_file(input);
     if (src.empty()) {
@@ -120,6 +120,13 @@ int main(int argc, char** argv) {
     }
     // Binary backends need a destination; default it from the input name.
     if (out_path.empty() && emit == Emit::Midi) out_path = calliope::cli::replace_ext(input, ".mid");
+    if (out_path.empty() && emit == Emit::Wav)  out_path = calliope::cli::replace_ext(input, ".wav");
+    if (out_path.empty() && emit == Emit::Mp3)  out_path = calliope::cli::replace_ext(input, ".mp3");
+    if (out_path.empty() && emit == Emit::Mp4)  out_path = calliope::cli::replace_ext(input, ".mp4");
 
-    return calliope::cli::emit_output(c, emit, out_path);
+    // Audio backends fall back to the bundled Grand Piano when no --soundfont given.
+    const bool is_audio = emit == Emit::Wav || emit == Emit::Mp3 || emit == Emit::Mp4;
+    if (soundfont.empty() && is_audio) soundfont = calliope::cli::default_soundfont();
+
+    return calliope::cli::emit_output(c, emit, out_path, soundfont);
 }

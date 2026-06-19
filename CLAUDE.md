@@ -28,7 +28,7 @@ development subject = subject `par` (invert subject ^+ P5)
   tagged `O1`..`O11`. Several are now resolved (see "Design decisions" below);
   O8–O11 remain open.
 
-## Status (2026-06-18)
+## Status (2026-06-19)
 
 Frontend first cut exists; nothing executes music yet.
 
@@ -40,18 +40,30 @@ Frontend first cut exists; nothing executes music yet.
   the output-backend dispatch + `Emit`) lives in **`helper.{hpp,cpp}`**
   (`calliope::cli`), so `compiler.cpp` / `calliopei.cpp` are just arg parsing +
   orchestration.
-- `src/compiler/compiler.cpp` — `calliope` compiler CLI: `-o <file>` picks the
-  backend by extension (`.mid`/`.midi` → MIDI, `.ir` → Music IR text); `--emit
-  ir|midi` forces it; with neither the IR prints to stdout. `--emit midi` with no
-  `-o` derives the name (`song.cal` → `song.mid`). `--soundfont` is parsed but
-  reserved (no audio backend yet); `wav`/`mp3`/`mp4`/`musicxml` still error
-  ("not implemented"). `--dump tokens|ast|types` for debug.
-- `src/compiler/backend/midi.{hpp,cpp}` — **first real backend** (`calliope::backend
-  ::write_midi`): lowers the Music IR to a flat, time-sorted note-on/off stream (a
-  minimal stand-in for the score IR — Seq concatenates, Par overlays) and writes a
-  format-0 Standard MIDI File. 480 ticks/quarter; pitch → MIDI key = `semitones +
-  12`; durations → ticks (exact for dyadic/triplet/quintuplet, else rounded);
-  fixed 120 bpm, velocity 80, channel 0.
+- `src/compiler/calliope.cpp` — `calliope` compiler CLI: `-o <file>` picks the
+  backend by extension (`.mid`/`.midi` → MIDI, `.wav` → audio, `.ir` → Music IR
+  text; `.mp3`/`.mp4` recognized too); `--emit ir|midi|wav` forces it; with neither
+  the IR prints to stdout. `--emit midi`/`--emit wav` with no `-o` derives the name
+  (`song.cal` → `song.mid`/`song.wav`). `--soundfont <file.sfz>` picks the audio
+  instrument (defaults to the bundled SSO Grand Piano); `mp3`/`mp4`/`musicxml` are
+  recognized but still error ("not implemented"). `--dump tokens|ast|types` for debug.
+- `src/compiler/backend/score.{hpp,cpp}` — **shared timing seam** (`calliope::backend
+  ::flatten`): walks the Music tree (Seq concatenates, Par overlays, Rest advances)
+  into a flat list of absolute-timed `TimedNote`s in **exact Rational whole-note
+  units**, with pitch already collapsed to a MIDI key (`semitones + 12`, clamped).
+  A minimal stand-in for the score IR; both `midi` and `audio` source notes from it.
+- `src/compiler/backend/midi.{hpp,cpp}` — **MIDI backend** (`calliope::backend
+  ::write_midi`): turns `flatten`'s notes into a time-sorted note-on/off stream and
+  writes a format-0 Standard MIDI File. 480 ticks/quarter; durations → ticks (exact
+  for dyadic/triplet/quintuplet, else rounded); fixed 120 bpm, velocity 80, channel 0.
+- `src/compiler/backend/audio.{hpp,cpp}` (+ `miniaudio_impl.cpp`) — **audio backend**
+  (`calliope::backend::write_wav`): drives the **sfizz** SFZ sampler block by block
+  (`flatten`'s notes → sample positions at 120 bpm) and writes a stereo f32 **WAV**
+  via **miniaudio**'s encoder. Soundfont defaults to the bundled SSO **Grand Piano**
+  (`cli::default_soundfont`); override with `--soundfont <file.sfz>`. Built with
+  `CALLIOPE_AUDIO` (ON
+  where the sfizz prebuilts exist — Linux); other binaries report it unavailable.
+  Offline render only — live playback is a later follow-up.
 - `src/compiler/calliopei.cpp` — `calliopei`: the interpreter. `calliopei file.cal`
   runs a file (prints `main`'s Music IR); `calliopei` with no args starts a REPL.
   The REPL keeps a **session**: a line that parses as a definition (`x = …`, a
@@ -163,11 +175,15 @@ instance. **A `<` opens a chord only when it hugs its first note** (`<c e g>`); 
 spaced `<` is comparison (`a < b`), resolving the reserved-letter ambiguity at
 parse time (`parse::opens_chord`).
 
-A **MIDI backend** exists (`backend/midi.cpp`): the Music IR lowers straight to a
-.mid file (the score IR is still implicit — the lowering inlines the time walk).
-Not yet built: octave-resolution pass (absolute works inline; `#relative` needs
-it), a proper score IR + audio/MusicXML backends, more prelude (intervals as a
-monoid, scales/keys, chords/harmony, durations/rhythm — `Modify`/control nodes).
+Two backends exist. **MIDI** (`backend/midi.cpp`) writes a .mid file; **audio**
+(`backend/audio.cpp`) renders a stereo WAV through the sfizz sampler + miniaudio
+(`--emit wav --soundfont <file.sfz>`). Both share `backend/score.cpp`'s `flatten`
+(Seq concat, Par overlay, Rest advance) — the explicit-but-minimal score IR seed,
+so the time walk is no longer duplicated. Not yet built: octave-resolution pass
+(absolute works inline; `#relative` needs it), a richer score IR + live-playback /
+MusicXML backends, more prelude (intervals as a monoid, scales/keys, chords/harmony,
+durations/rhythm — `Modify`/control nodes); audio tempo/velocity are still fixed
+(120 bpm, 80) since there are no `Modify` nodes yet.
 Bootstrap: step 1 ✓ →
 step 2 ✓ → step 3 (in progress).
 
@@ -256,7 +272,11 @@ src/compiler/
     typecheck.{hpp,cpp} Hindley–Milner inference (unify + Algorithm W, SCC gen)
     driver.{hpp,cpp}    compile/compile_expr/type_of — the full pipeline as one API
   backend/
+    score.{hpp,cpp}     Music IR → flat absolute-timed notes (flatten → [TimedNote],
+                        exact Rational time) — shared timing seam, score-IR seed
     midi.{hpp,cpp}      Music IR → format-0 Standard MIDI File (write_midi)
+    audio.{hpp,cpp}     Music IR → stereo WAV via sfizz + miniaudio (write_wav)
+    miniaudio_impl.cpp  the one TU that compiles MINIAUDIO_IMPLEMENTATION
 standard_library/
   prelude.cal           stdlib in Calliope: list commons + music transforms
                         (line/chord/transpose/invert/retrograde/times/…)

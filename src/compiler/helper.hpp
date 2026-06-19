@@ -17,6 +17,11 @@ std::string read_file(const std::string& path);
 // Returns a static string literal — safe to bind to a string_view.
 const char* prelude_path();
 
+// Default audio soundfont: the SSO Grand Piano (.sfz) under CALLIOPE_SOUNDFONT_DIR.
+// "" if that dir is undefined (e.g. binaries built without the audio backend).
+// The file may still be absent if the SSO library was never fetched.
+std::string default_soundfont();
+
 // Print a compilation's parse / type / runtime errors to stderr.
 void print_errors(const driver::Compilation& c);
 
@@ -35,7 +40,9 @@ std::string ext_of(const std::string& path);            // "song.mid" -> "mid"
 std::string replace_ext(const std::string& path, const std::string& newext);
 
 // Write `main`'s value through the chosen backend (out_path "" = stdout, IR only).
+// `soundfont` is the .sfz instrument for audio backends ("" if none given).
 // Returns the process exit code.
-int emit_output(const driver::Compilation& c, Emit emit, const std::string& out_path);
+int emit_output(const driver::Compilation& c, Emit emit, const std::string& out_path,
+                const std::string& soundfont);
 
 } // namespace calliope::cli

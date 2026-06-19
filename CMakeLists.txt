@@ -24,8 +24,20 @@ set(CALLIOPE_CORE
     src/compiler/core/eval.cpp
     src/compiler/core/typecheck.cpp
     src/compiler/core/driver.cpp
+    src/compiler/backend/score.cpp
     src/compiler/backend/midi.cpp
 )
+
+# Audio (WAV) backend: sfizz + miniaudio. On by default where prebuilt sfizz
+# archives exist (Linux). Off elsewhere — the calliope binary then reports the
+# audio backend as unavailable instead of failing to link.
+option(CALLIOPE_AUDIO "Build the sfizz/miniaudio WAV backend" ON)
+set(CALLIOPE_SFIZZ_LIB_DIR "${CMAKE_SOURCE_DIR}/third_party/libs/sfizz/linux")
+if(CALLIOPE_AUDIO AND NOT EXISTS "${CALLIOPE_SFIZZ_LIB_DIR}/libsfizz.a")
+    message(WARNING "CALLIOPE_AUDIO=ON but sfizz prebuilts not found at "
+                    "${CALLIOPE_SFIZZ_LIB_DIR}; disabling the audio backend.")
+    set(CALLIOPE_AUDIO OFF)
+endif()
 
 add_executable(calliope
     ./src/compiler/calliope.cpp
@@ -45,6 +57,24 @@ if(MSVC)
     target_compile_options(calliope PRIVATE /W4)
 else()
     target_compile_options(calliope PRIVATE -Wall -Wextra)
+endif()
+
+# Wire the audio backend into the `calliope` binary only (sfizz is a heavy static
+# link; calliopei and the test binary stay light). The sfizz archives + absl have
+# circular dependencies, so link them inside a --start-group/--end-group.
+if(CALLIOPE_AUDIO)
+    target_sources(calliope PRIVATE
+        src/compiler/backend/audio.cpp
+        src/compiler/backend/miniaudio_impl.cpp)
+    target_include_directories(calliope PRIVATE
+        third_party/libs
+        third_party/libs/sfizz/include)
+    target_compile_definitions(calliope PRIVATE CALLIOPE_WITH_AUDIO)
+    file(GLOB CALLIOPE_SFIZZ_ARCHIVES "${CALLIOPE_SFIZZ_LIB_DIR}/*.a")
+    find_package(Threads REQUIRED)
+    target_link_libraries(calliope PRIVATE
+        -Wl,--start-group ${CALLIOPE_SFIZZ_ARCHIVES} -Wl,--end-group
+        Threads::Threads ${CMAKE_DL_LIBS} m)
 endif()
 
 # --- interpreter: runs a file or starts a REPL ----------------------------
@@ -76,6 +106,7 @@ add_executable(calliope_tests
     tests/test_typecheck.cpp
     tests/test_stdlib.cpp
     tests/test_driver.cpp
+    tests/test_score.cpp
     tests/test_midi.cpp
     tests/test_main.cpp
     ${CALLIOPE_CORE}

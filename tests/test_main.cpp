@@ -12,6 +12,7 @@ void run_eval_tests();
 void run_typecheck_tests();
 void run_stdlib_tests();
 void run_driver_tests();
+void run_score_tests();
 void run_midi_tests();
 
 int main() {
@@ -24,6 +25,7 @@ int main() {
     run_typecheck_tests();
     run_stdlib_tests();
     run_driver_tests();
+    run_score_tests();
     run_midi_tests();
 
     std::printf("\n%d checks, %d failures\n",

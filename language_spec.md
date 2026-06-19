@@ -596,10 +596,11 @@ Decisions we should make explicitly:
   combinators) rather than implicit laziness.
 - **O8 — Pitch representation.** Spelled pitch (C# vs Db) vs. semitone integer
   (O2). Recommendation: spelled in IR, `semitones` for playback.
-- **O9 — Output target priority.** Which backend first? Recommendation: audio
-  playback (we already vendor three synths + miniaudio) — instant feedback
-  loop. MusicXML/engraving second. Note hoxml *parses* MusicXML; we'd write our
-  own emitter.
+- **O9 — Output target priority. _In progress:_** MIDI landed first (the score IR
+  is already MIDI-shaped), then the first **audio backend** — offline **WAV** render
+  via **sfizz** (plays the vendored SSO `.sfz` library) → **miniaudio**'s WAV encoder
+  (`--emit wav -o x.wav --soundfont <file.sfz>`). Live playback and MusicXML/engraving
+  are still to come (hoxml *parses* MusicXML; we'd write our own emitter).
 - **O10 — Octave mode. _Decided:_** absolute by default, with opt-in `#relative
   <ref>` / `#absolute` region directives (§5.1, §5.3). Both modes share one **AST
   octave-resolution pass** (`preprocess → parse → resolve → typecheck → desugar`);
