@@ -1,0 +1,23 @@
+-- comparing-music.cal — comparing pitches and whole phrases.
+--
+-- Ordering `< > <= >=` works on pitches, by height (semitones). Equality
+-- `== /=` is structural: pitches compare by *spelling* (fis' is not ges'), and
+-- whole Music values compare deeply — same shape, pitches, and durations.
+
+#load "prelude"
+
+-- pitch ordering, by height
+rising = c' < g'             -- True: C4 is below G4
+
+-- spelled equality: enharmonics are NOT equal (F# is spelled apart from Gb)
+enharmonicEq = fis' == ges'  -- False
+
+-- deep equality on phrases: same notes and durations or not
+phraseA = c' e' g'
+phraseB = c' e' g'
+phraseC = c' e' a'
+sameAB  = phraseA == phraseB -- True
+sameAC  = phraseA == phraseC -- False
+
+-- use a phrase comparison to decide: if A equals B, play it twice, else once
+main = if sameAB then phraseA :*: 2 else phraseA

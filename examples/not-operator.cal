@@ -1,0 +1,19 @@
+-- not-operator.cal — the `not` boolean operator (with `and` / `or`).
+--
+-- `not` flips a Bool; `and` / `or` are the short-circuit boolean operators.
+
+#load "prelude"
+
+low  = c'
+high = g'
+
+-- a comparison yields a Bool: True when `high` is above `low` (g' above c')
+ascending = high > low
+
+-- `not` flips a Bool; `and` / `or` combine them
+descending  = not ascending                  -- False
+sameOrAsc   = ascending or (low == high)      -- True
+strictlyAsc = ascending and (not (low == high))
+
+-- pick a phrase with a boolean: the rising line if strictly ascending, else falling
+main = if strictlyAsc then c' d' e' g' else g' e' d' c'
