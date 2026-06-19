@@ -1,5 +1,0 @@
-```haskell
-
-```
-```haskell
-```
