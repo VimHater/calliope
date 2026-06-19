@@ -40,13 +40,15 @@ Frontend first cut exists; nothing executes music yet.
   the output-backend dispatch + `Emit`) lives in **`helper.{hpp,cpp}`**
   (`calliope::cli`), so `compiler.cpp` / `calliopei.cpp` are just arg parsing +
   orchestration.
-- `src/compiler/calliope.cpp` — `calliope` compiler CLI: `-o <file>` picks the
-  backend by extension (`.mid`/`.midi` → MIDI, `.wav` → audio, `.ir` → Music IR
-  text; `.mp3`/`.mp4` recognized too); `--emit ir|midi|wav` forces it; with neither
-  the IR prints to stdout. `--emit midi`/`--emit wav` with no `-o` derives the name
-  (`song.cal` → `song.mid`/`song.wav`). `--soundfont <file.sfz>` picks the audio
-  instrument (defaults to the bundled SSO Grand Piano); `mp3`/`mp4`/`musicxml` are
-  recognized but still error ("not implemented"). `--dump tokens|ast|types` for debug.
+- `src/compiler/calliope.cpp` — `calliope` is the **compiler** (files only; no live
+  playback — that's `calliopei`'s job). `-o <file>` picks the backend by extension
+  (`.mid`/`.midi` → MIDI, `.wav` → audio, `.ir` → Music IR text; `.mp3`/`.mp4`
+  recognized too); `--emit ir|midi|wav` forces it; **with neither, the default is
+  WAV** (`song.cal` → `song.wav`). `--emit midi`/`--emit wav` with no `-o` derives
+  the name. `--soundfont <file.sfz>` picks the audio instrument (defaults to the
+  bundled SSO Grand Piano); `mp3`/`mp4`/`musicxml` are recognized but still error
+  ("not implemented"). **`--debug` prints the evaluated Music IR to stdout (emits no
+  file)**; `--dump tokens|ast|types` for lexer/parser/type debug.
 - `src/compiler/backend/score.{hpp,cpp}` — **shared timing seam** (`calliope::backend
   ::flatten`): walks the Music tree (Seq concatenates, Par overlays, Rest advances)
   into a flat list of absolute-timed `TimedNote`s in **exact Rational seconds** (each
@@ -68,18 +70,38 @@ Frontend first cut exists; nothing executes music yet.
   when present, else a fetched placeholder GM **SF2** through **tsf** by GM program;
   un-instrumented notes use the `--soundfont` default (`cli::default_soundfont`, the
   SSO Grand Piano). Built with `CALLIOPE_AUDIO` (ON where the sfizz prebuilts exist —
-  Linux); other binaries report it unavailable. Offline render only — live playback
-  is a later follow-up.
-- `src/compiler/calliopei.cpp` — `calliopei`: the interpreter. `calliopei file.cal`
-  runs a file (prints `main`'s Music IR); `calliopei` with no args starts a REPL.
+  Linux); other binaries report it unavailable. **Two outputs share one renderer**
+  (`render_master` → interleaved stereo f32): `write_wav` encodes it to a file;
+  **`play`** (live) streams it through a **miniaudio playback device** (`ma_device`,
+  f32 callback over an atomic cursor) — render-then-stream, blocks until the piece
+  drains. **`calliopei`** drives it (`calliopei file.cal` plays; `:play` in the REPL)
+  via `cli::play` — `calliope` (the compiler) does not play, only writes files. The audio
+  backend is now linked into **both** `calliope` and `calliopei` (CMake
+  `calliope_add_audio`); `miniaudio_impl.cpp` keeps the device-I/O layer (only the
+  resource manager is stripped). Real-time per-note synthesis + **live visualization
+  are TODO** (see `backend/visualize.hpp`).
+- `src/compiler/backend/visualize.hpp` — **TODO stub** for a **raylib** window that
+  draws the score in sync with `play` (shares `flatten`'s timed notes). Two planned
+  modes: `VizMode::Daw` (piano-roll / multi-track, moving playhead) and
+  `VizMode::Piano` (keys light as notes sound). Raylib prebuilts already vendored
+  (`third_party/libs/raylib`); a future `CALLIOPE_VISUAL` option compiles + links it.
+- `src/compiler/calliopei.cpp` — `calliopei`: the **interpreter / audio player**.
+  `calliopei file.cal` runs a file = **plays `main` live** (`--debug` prints its
+  Music IR instead); `calliopei` with no args starts a REPL.
   The REPL keeps a **session**: a line that parses as a definition (`x = …`, a
   signature, `class`/`instance`) **or a `#` directive** (`#load "…"`) is remembered
-  and rejected if it doesn't compile; other lines are evaluated as expressions with
-  prelude + session in scope (value + type on one line; `:type`, `:quit`). Uses
-  plain `std::getline` — **readline (line editing + history) is a TODO**, to be done
-  with a cross-platform library (replxx / linenoise + Win32). `#load` paths resolve
-  cross-platform (`/` and `\\`) via `driver::directory_of` / `LoadOptions.base_dir`
-  — relative to the running file for files, to the cwd in the REPL.
+  and rejected if it doesn't compile; other lines are **evaluated as real
+  expressions** via `driver::compile_expr` (spliced in as a synthetic `it = (<expr>)`
+  binding — **not** string-pasted into `main = …`, so a bare expression can't collide
+  with a user-defined `main`), with prelude + session in scope. A **Music** result
+  prints just its type (the IR tree is verbose — that's `:debug` / `--debug`
+  territory); a scalar (`Int`/`Bool`/`Pitch`/list/…) prints value + type. Commands:
+  `:type <expr>`, **`:debug <expr>`** (print the full value / Music IR), **`:play
+  <expr>`** (evaluate + sound it live), `:quit`. Uses plain `std::getline` —
+  **readline (line editing + history) is a
+  TODO**, to be done with a cross-platform library (replxx / linenoise + Win32).
+  `#load` paths resolve cross-platform (`/` and `\\`) via `driver::directory_of` /
+  `LoadOptions.base_dir` — relative to the running file for files, to the cwd in the REPL.
 - `src/compiler/core/` — `token.hpp`, `lexer.{hpp,cpp}` (pitch-class-reserving
   lexer), `ast.{hpp,cpp}` (index-pooled tree + S-expr printer),
   `parser.{hpp,cpp}` (recursive descent + precedence climbing).
@@ -315,12 +337,15 @@ src/compiler/
     parser.{hpp,cpp}    parse_program() — recursive descent + precedence climbing
     eval.{hpp,cpp}      tree-walking evaluator (Value/Env/Closure, builtins)
     typecheck.{hpp,cpp} Hindley–Milner inference (unify + Algorithm W, SCC gen)
-    driver.{hpp,cpp}    compile/compile_expr/type_of — the full pipeline as one API
+    driver.{hpp,cpp}    compile / compile_expr (bare REPL expr) / type_of — the
+                        full pipeline as one API
   backend/
     score.{hpp,cpp}     Music IR → flat absolute-timed notes (flatten → [TimedNote],
                         exact Rational time) — shared timing seam, score-IR seed
     midi.{hpp,cpp}      Music IR → format-0 Standard MIDI File (write_midi)
-    audio.{hpp,cpp}     Music IR → stereo WAV via sfizz (+ tsf SF2 fallback) + miniaudio
+    audio.{hpp,cpp}     Music IR → stereo f32 (render_master): write_wav (file) +
+                        play (live, miniaudio device); sfizz + tsf SF2 fallback
+    visualize.hpp       TODO stub: raylib score view (DAW / piano modes), synced to play
     miniaudio_impl.cpp  the one TU that compiles MINIAUDIO_IMPLEMENTATION
     tsf_impl.cpp        the one TU that compiles TSF_IMPLEMENTATION (SF2 fallback synth)
 standard_library/

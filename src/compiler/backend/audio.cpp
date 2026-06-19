@@ -8,10 +8,13 @@
 #include "tsf.h" // no TSF_IMPLEMENTATION here (see tsf_impl.cpp)
 
 #include <algorithm>
+#include <atomic>
+#include <chrono>
 #include <cstdio>
 #include <fstream>
 #include <map>
 #include <string>
+#include <thread>
 #include <vector>
 
 namespace calliope::backend {
@@ -203,14 +206,14 @@ std::vector<float> render_group(int inst, const std::string& path, int gmprog,
     return {};
 }
 
-} // namespace
-
-bool write_wav(const music::Music& m, music::MusicId root,
-               const AudioOptions& opt, const std::string& path, std::string& err) {
+// Render the whole piece to one interleaved stereo f32 master buffer: flatten to
+// timed notes, group by instrument, render each group on its own synth, sum, and
+// hard-limit to [-1, 1]. Shared by the WAV writer and the live player.
+std::vector<float> render_master(const music::Music& m, music::MusicId root,
+                                 const AudioOptions& opt) {
     std::vector<TimedNote> notes = flatten(m, root);
 
-    // Group notes by instrument (named id or custom .sfz path), render each on its
-    // own synth, and mix (sum) the groups into one master buffer. The map key keeps
+    // Group notes by instrument (named id or custom .sfz path). The map key keeps
     // distinct custom soundfonts (all instrument == -1) apart; std::map gives a
     // stable, deterministic order.
     std::map<std::string, std::vector<TimedNote>> groups;
@@ -233,8 +236,75 @@ bool write_wav(const music::Music& m, music::MusicId root,
     }
 
     // Summing groups (and a hot fallback synth) can exceed unity; hard-limit to
-    // [-1, 1] so the f32 WAV never carries out-of-range samples that players clip.
+    // [-1, 1] so no out-of-range sample reaches the encoder / device.
     for (float& s : master) s = s < -1.0f ? -1.0f : (s > 1.0f ? 1.0f : s);
+    return master;
+}
+
+// Playback cursor shared with the miniaudio audio-thread callback: copy from the
+// pre-rendered master buffer, advance `frame`, and signal `done` at the end.
+struct PlaybackState {
+    const std::vector<float>* master = nullptr; // interleaved stereo f32
+    std::atomic<std::size_t> frame{0};          // next frame to play
+    std::atomic<bool> done{false};
+};
+
+void playback_callback(ma_device* dev, void* out, const void* in, ma_uint32 frames) {
+    (void)in;
+    PlaybackState* st = static_cast<PlaybackState*>(dev->pUserData);
+    float* dst = static_cast<float*>(out);
+    const std::vector<float>& buf = *st->master;
+    std::size_t total = buf.size() / 2;            // frames available
+    std::size_t pos = st->frame.load(std::memory_order_relaxed);
+    for (ma_uint32 i = 0; i < frames; ++i) {
+        if (pos < total) { dst[2 * i] = buf[2 * pos]; dst[2 * i + 1] = buf[2 * pos + 1]; ++pos; }
+        else             { dst[2 * i] = 0.0f; dst[2 * i + 1] = 0.0f; }
+    }
+    st->frame.store(pos, std::memory_order_relaxed);
+    if (pos >= total) st->done.store(true, std::memory_order_relaxed);
+}
+
+} // namespace
+
+bool play(const music::Music& m, music::MusicId root,
+          const AudioOptions& opt, std::string& err) {
+    std::vector<float> master = render_master(m, root, opt);
+    if (master.empty()) { err = "nothing to play (no notes rendered)"; return false; }
+
+    PlaybackState st;
+    st.master = &master;
+
+    ma_device_config cfg = ma_device_config_init(ma_device_type_playback);
+    cfg.playback.format   = ma_format_f32;
+    cfg.playback.channels = 2;
+    cfg.sampleRate        = static_cast<ma_uint32>(opt.sample_rate);
+    cfg.dataCallback      = playback_callback;
+    cfg.pUserData         = &st;
+
+    ma_device device;
+    if (ma_device_init(nullptr, &cfg, &device) != MA_SUCCESS) {
+        err = "could not open an audio playback device";
+        return false;
+    }
+    if (ma_device_start(&device) != MA_SUCCESS) {
+        ma_device_uninit(&device);
+        err = "could not start the audio playback device";
+        return false;
+    }
+    // Block on the audio thread draining the buffer. TODO(visualize): replace this
+    // idle wait with the raylib render loop so the piece is drawn as it sounds.
+    while (!st.done.load(std::memory_order_relaxed))
+        std::this_thread::sleep_for(std::chrono::milliseconds(15));
+    // a short tail so the device flushes its last block before we close it
+    std::this_thread::sleep_for(std::chrono::milliseconds(120));
+
+    ma_device_uninit(&device);
+    return true;
+}
+
+bool write_wav(const music::Music& m, music::MusicId root,
+               const AudioOptions& opt, const std::string& path, std::string& err) {
+    std::vector<float> master = render_master(m, root, opt);
 
     // ---- WAV encoder ----
     ma_encoder_config cfg =

@@ -70,6 +70,45 @@ void run_driver_tests() {
         CHECK(c.main_value.i == 2);
     }
 
+    // ---- compile_expr: evaluate a bare expression in session scope ----------
+    // (the REPL path — no `main = ` string-pasting)
+    {
+        driver::Compilation c;
+        driver::compile_expr("", "6 * 7", with_prelude, c);
+        CHECK(driver::ok(c));
+        CHECK(c.has_main);            // result lands in main_value
+        CHECK(c.main_value.i == 42);
+        CHECK_EQ_STR(c.main_type, "Int");
+    }
+    // an expression that uses earlier session definitions
+    {
+        driver::Compilation c;
+        driver::compile_expr("subj = c' d' e'\n", "length (reverse [1, 2, 3])", with_prelude, c);
+        CHECK(driver::ok(c));
+        CHECK(c.main_value.i == 3);
+    }
+    // a bare expression evaluates even when the session defines its own `main`
+    // (the old `main = <expr>` padding would have made a duplicate binding)
+    {
+        driver::Compilation c;
+        driver::compile_expr("main = c d e\n", "2 + 3", with_prelude, c);
+        CHECK(driver::ok(c));
+        CHECK(c.main_value.i == 5);
+    }
+    // a notation-run expression is Music (parenthesizing keeps the run intact)
+    {
+        driver::Compilation c;
+        driver::compile_expr("", "c d e", with_prelude, c);
+        CHECK(driver::ok(c));
+        CHECK(c.main_value.kind == eval::ValueKind::Music);
+    }
+    // type_of_expr infers without evaluating
+    {
+        std::vector<std::string> errs;
+        CHECK_EQ_STR(driver::type_of_expr("", "\\x -> x + 1", with_prelude, errs), "Int -> Int");
+        CHECK(errs.empty());
+    }
+
     // directory_of is cross-platform (handles '/' and '\\')
     CHECK_EQ_STR(driver::directory_of("a/b/c.cal"), "a/b");
     CHECK_EQ_STR(driver::directory_of("a\\b\\c.cal"), "a\\b");

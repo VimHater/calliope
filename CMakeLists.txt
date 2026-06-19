@@ -42,6 +42,33 @@ if(CALLIOPE_AUDIO AND NOT EXISTS "${CALLIOPE_SFIZZ_LIB_DIR}/libsfizz.a")
     set(CALLIOPE_AUDIO OFF)
 endif()
 
+# Attach the sfizz/tsf/miniaudio audio backend (WAV writer + live playback) to a
+# target. The sfizz archives + absl have circular deps, so link them inside a
+# --start-group/--end-group. No-op when CALLIOPE_AUDIO is OFF (the binary then
+# reports the audio backend as unavailable instead of failing to link).
+function(calliope_add_audio tgt)
+    if(NOT CALLIOPE_AUDIO)
+        return()
+    endif()
+    target_sources(${tgt} PRIVATE
+        src/compiler/backend/audio.cpp
+        src/compiler/backend/miniaudio_impl.cpp
+        src/compiler/backend/tsf_impl.cpp)
+    target_include_directories(${tgt} PRIVATE
+        third_party/libs
+        third_party/libs/sfizz/include)
+    target_compile_definitions(${tgt} PRIVATE CALLIOPE_WITH_AUDIO)
+    if(CALLIOPE_FALLBACK_SF2)
+        target_compile_definitions(${tgt} PRIVATE
+            CALLIOPE_FALLBACK_SF2="${CALLIOPE_FALLBACK_SF2}")
+    endif()
+    file(GLOB CALLIOPE_SFIZZ_ARCHIVES "${CALLIOPE_SFIZZ_LIB_DIR}/*.a")
+    find_package(Threads REQUIRED)
+    target_link_libraries(${tgt} PRIVATE
+        -Wl,--start-group ${CALLIOPE_SFIZZ_ARCHIVES} -Wl,--end-group
+        Threads::Threads ${CMAKE_DL_LIBS} m)
+endfunction()
+
 add_executable(calliope
     ./src/compiler/calliope.cpp
     src/compiler/helper.cpp
@@ -62,30 +89,11 @@ else()
     target_compile_options(calliope PRIVATE -Wall -Wextra)
 endif()
 
-# Wire the audio backend into the `calliope` binary only (sfizz is a heavy static
-# link; calliopei and the test binary stay light). The sfizz archives + absl have
-# circular dependencies, so link them inside a --start-group/--end-group.
-if(CALLIOPE_AUDIO)
-    target_sources(calliope PRIVATE
-        src/compiler/backend/audio.cpp
-        src/compiler/backend/miniaudio_impl.cpp
-        src/compiler/backend/tsf_impl.cpp)
-    target_include_directories(calliope PRIVATE
-        third_party/libs
-        third_party/libs/sfizz/include)
-    target_compile_definitions(calliope PRIVATE CALLIOPE_WITH_AUDIO)
-    if(CALLIOPE_FALLBACK_SF2)
-        target_compile_definitions(calliope PRIVATE
-            CALLIOPE_FALLBACK_SF2="${CALLIOPE_FALLBACK_SF2}")
-    endif()
-    file(GLOB CALLIOPE_SFIZZ_ARCHIVES "${CALLIOPE_SFIZZ_LIB_DIR}/*.a")
-    find_package(Threads REQUIRED)
-    target_link_libraries(calliope PRIVATE
-        -Wl,--start-group ${CALLIOPE_SFIZZ_ARCHIVES} -Wl,--end-group
-        Threads::Threads ${CMAKE_DL_LIBS} m)
-endif()
+# The `calliope` compiler emits files and can --play live audio.
+calliope_add_audio(calliope)
 
 # --- interpreter: runs a file or starts a REPL ----------------------------
+# Audio is wired in here too so the REPL's :play can sound expressions live.
 add_executable(calliopei
     src/compiler/calliopei.cpp
     src/compiler/helper.cpp
@@ -93,7 +101,9 @@ add_executable(calliopei
 )
 target_include_directories(calliopei PRIVATE src/compiler)
 target_compile_definitions(calliopei PRIVATE
-    CALLIOPE_PRELUDE_PATH="${CALLIOPE_STDLIB_DIR}/prelude.cal")
+    CALLIOPE_PRELUDE_PATH="${CALLIOPE_STDLIB_DIR}/prelude.cal"
+    CALLIOPE_SOUNDFONT_DIR="${CALLIOPE_SOUNDFONT_DIR}")
+calliope_add_audio(calliopei)
 if(MSVC)
     target_compile_options(calliopei PRIVATE /W4)
 else()

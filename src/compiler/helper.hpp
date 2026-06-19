@@ -46,4 +46,11 @@ std::string replace_ext(const std::string& path, const std::string& newext);
 int emit_output(const driver::Compilation& c, Emit emit, const std::string& out_path,
                 const std::string& soundfont, const std::string& base_dir);
 
+// Play `main`'s value live on the default audio device (no file written).
+// `soundfont` is the default .sfz voice; `base_dir` resolves custom `sfz "..."`
+// paths. Returns the process exit code. Errors if the binary lacks the audio
+// backend or `main` is not Music.
+int play(const driver::Compilation& c, const std::string& soundfont,
+         const std::string& base_dir);
+
 } // namespace calliope::cli

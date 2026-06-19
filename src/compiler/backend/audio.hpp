@@ -32,4 +32,14 @@ struct AudioOptions {
 bool write_wav(const music::Music& m, music::MusicId root,
                const AudioOptions& opt, const std::string& path, std::string& err);
 
+// Render the same subtree and play it on the default audio output device
+// (offline render, then stream the PCM through a miniaudio playback device).
+// Blocks until the piece finishes. Returns false and fills `err` on failure.
+//
+// TODO(visualize): while this plays, drive a raylib window rendering the score —
+// a DAW-like piano-roll/track view and a piano-keyboard view (see
+// backend/visualize.hpp). Playback and the visual share this timed-note stream.
+bool play(const music::Music& m, music::MusicId root,
+          const AudioOptions& opt, std::string& err);
+
 } // namespace calliope::backend

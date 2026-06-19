@@ -62,10 +62,14 @@ void append_unit(ast::Ast& dest, const ast::Ast& unit, std::vector<ast::NodeId>&
 }
 
 // Parse the program and every unit it loads, then merge their declarations into
-// `out_ast`. Source text is owned by `sources` (stable addresses).
+// `out_ast`. Source text is owned by `sources` (stable addresses). A non-empty
+// `trailing` is parsed as one more unit merged LAST (after the program), so it
+// can reference everything before it — used by `compile_expr` to splice in a
+// synthetic `it = (<expr>)` binding for a bare REPL expression.
 void assemble(std::string_view program, const LoadOptions& opts,
               std::deque<std::string>& sources, ast::Ast& out_ast,
-              std::vector<std::string>& parse_errors) {
+              std::vector<std::string>& parse_errors,
+              std::string_view trailing = {}) {
     // the program is its own unit (parsed first, to discover its #load directives)
     sources.push_back(std::string(program));
     std::vector<std::string> program_errors;
@@ -95,10 +99,20 @@ void assemble(std::string_view program, const LoadOptions& opts,
     }
     for (const std::string& e : program_errors) parse_errors.push_back(e);
 
-    // merge: loaded units first (so the program can use them), then the program
+    // an optional synthetic unit merged last (the REPL's `it = (<expr>)`)
+    bool have_trailing = !trailing.empty();
+    ast::Ast trailing_ast;
+    if (have_trailing) {
+        sources.push_back(std::string(trailing));
+        trailing_ast = parse::parse_program(lex::tokenize(sources.back()), &parse_errors);
+    }
+
+    // merge: loaded units first (so the program can use them), then the program,
+    // then the trailing unit (so it sees both the prelude and the program).
     std::vector<ast::NodeId> prog_kids;
     for (const ast::Ast& u : loaded) append_unit(out_ast, u, prog_kids);
     append_unit(out_ast, prog_ast, prog_kids);
+    if (have_trailing) append_unit(out_ast, trailing_ast, prog_kids);
 
     ast::Node prog;
     prog.kind = ast::NodeKind::Program;
@@ -127,6 +141,34 @@ std::string type_of_main(std::string_view program, const LoadOptions& opts,
     ast::Ast a;
     assemble(program, opts, sources, a, errors);
     return types::infer_named_type(a, "main", errors);
+}
+
+// The synthetic binding a bare REPL expression is spliced in as. Wrapping the
+// expression in parentheses keeps operator / notation-run exprs intact, and the
+// name `it` (ghci-style) can't collide with a user's own `main`.
+namespace {
+std::string it_binding(std::string_view expr) {
+    return "it = (" + std::string(expr) + ")\n";
+}
+} // namespace
+
+void compile_expr(std::string_view session, std::string_view expr,
+                  const LoadOptions& opts, Compilation& out) {
+    std::string trailing = it_binding(expr);
+    assemble(session, opts, out.sources, out.ast, out.parse_errors, trailing);
+    out.main_type = types::infer_named_type(out.ast, "it", out.type_errors);
+    auto env = eval::eval_program(out.ast, out.interp);
+    out.has_main = eval::env_lookup(env, "it", out.main_value);
+    out.runtime_errors = out.interp.errors;
+}
+
+std::string type_of_expr(std::string_view session, std::string_view expr,
+                         const LoadOptions& opts, std::vector<std::string>& errors) {
+    std::deque<std::string> sources;
+    ast::Ast a;
+    std::string trailing = it_binding(expr);
+    assemble(session, opts, sources, a, errors, trailing);
+    return types::infer_named_type(a, "it", errors);
 }
 
 std::string directory_of(std::string_view path) {

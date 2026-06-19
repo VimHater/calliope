@@ -25,11 +25,13 @@ void usage(const char* prog) {
         "  --emit <fmt>    force the backend: ir | midi | wav (overrides the extension)\n"
         "  --soundfont <f> .sfz instrument for the audio (wav) backend\n"
         "                  (default: the bundled SSO Grand Piano)\n"
+        "  --debug         print the evaluated Music IR to stdout (no file emitted)\n"
         "  --dump <what>   debug dump to stdout: tokens, ast, types (repeatable)\n"
         "  -h, --help      show this help\n"
         "\n"
-        "With no -o and no --emit, the Music IR is printed to stdout.\n"
-        "Backends implemented so far: ir, midi, wav.\n",
+        "With no -o and no --emit, a WAV is rendered (file.cal -> file.wav).\n"
+        "Backends: wav (default), midi, ir; --debug prints the Music IR.\n"
+        "Live playback is calliopei's job (the interpreter / player).\n",
         prog);
 }
 
@@ -42,6 +44,7 @@ int main(int argc, char** argv) {
     const char* input = nullptr;
     std::string out_path;
     std::string soundfont; // reserved for audio backends
+    bool want_debug = false;
 
     for (int i = 1; i < argc; i++) {
         const char* a = argv[i];
@@ -64,6 +67,7 @@ int main(int argc, char** argv) {
             soundfont = argv[i];
             continue;
         }
+        if (!std::strcmp(a, "--debug")) { want_debug = true; continue; }
         if (!std::strcmp(a, "--dump")) {
             if (++i >= argc) { std::fprintf(stderr, "error: --dump needs tokens|ast|types\n"); return 2; }
             const char* w = argv[i];
@@ -105,17 +109,23 @@ int main(int argc, char** argv) {
         return 1;
     }
 
+    // --debug prints the evaluated Music IR and emits nothing else.
+    if (want_debug) {
+        std::printf("%s\n", calliope::eval::show_value(c.main_value).c_str());
+        return calliope::driver::ok(c) ? 0 : 1;
+    }
+
     // Choose the backend: an explicit --emit wins; otherwise infer from the -o
-    // extension; with neither, print the Music IR to stdout.
+    // extension; with neither, render a WAV (the compiler's default output).
     if (!emit_given) {
         if (!out_path.empty()) {
             std::string e = calliope::cli::ext_of(out_path);
             if (!calliope::cli::emit_from_ext(e, emit)) {
-                std::fprintf(stderr, "error: unknown output extension '.%s' (use .mid or .ir)\n", e.c_str());
+                std::fprintf(stderr, "error: unknown output extension '.%s' (use .wav, .mid or .ir)\n", e.c_str());
                 return 2;
             }
         } else {
-            emit = Emit::Ir;
+            emit = Emit::Wav;
         }
     }
     // Binary backends need a destination; default it from the input name.

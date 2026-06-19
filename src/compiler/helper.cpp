@@ -207,4 +207,39 @@ int emit_output(const driver::Compilation& c, Emit emit, const std::string& out_
     return 1;
 }
 
+int play(const driver::Compilation& c, const std::string& soundfont,
+         const std::string& base_dir) {
+#ifdef CALLIOPE_WITH_AUDIO
+    const int status = driver::ok(c) ? 0 : 1;
+    if (soundfont.empty()) {
+        std::fprintf(stderr, "error: no soundfont for playback "
+                             "(pass --soundfont <file.sfz>; no default available)\n");
+        return 2;
+    }
+    music::Music lifted;
+    music::MusicId root = music::NoMusic;
+    const music::Music* mp = as_music(c, lifted, root);
+    if (!mp) {
+        std::fprintf(stderr, "error: playback needs `main` to be Music (got %s)\n",
+                     c.main_type.empty() ? "?" : c.main_type.c_str());
+        return 1;
+    }
+    backend::AudioOptions opt;
+    opt.sfz_path = soundfont;
+    opt.base_dir = base_dir;
+    std::string err;
+    if (!backend::play(*mp, root, opt, err)) {
+        std::fprintf(stderr, "error: %s\n", err.c_str());
+        return 1;
+    }
+    return status;
+#else
+    (void)c;
+    (void)soundfont;
+    (void)base_dir;
+    std::fprintf(stderr, "error: audio backend not built in this binary\n");
+    return 1;
+#endif
+}
+
 } // namespace calliope::cli

@@ -55,6 +55,17 @@ void compile(std::string_view program, const LoadOptions& opts, Compilation& out
 std::string type_of_main(std::string_view program, const LoadOptions& opts,
                          std::vector<std::string>& errors);
 
+// Evaluate a bare expression `expr` in the scope of `session` (the definitions
+// typed so far + the prelude). The expression is spliced in as a synthetic `it`
+// binding and the result lands in `out.main_value` / `out.main_type` — so the
+// REPL evaluates real expressions instead of string-pasting `main = <expr>`.
+void compile_expr(std::string_view session, std::string_view expr,
+                  const LoadOptions& opts, Compilation& out);
+
+// Infer the type of a bare expression in `session` scope (no evaluation).
+std::string type_of_expr(std::string_view session, std::string_view expr,
+                         const LoadOptions& opts, std::vector<std::string>& errors);
+
 // The directory part of a path (cross-platform: handles '/' and '\\'). "" if none.
 std::string directory_of(std::string_view path);
 
