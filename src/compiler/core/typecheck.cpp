@@ -630,6 +630,18 @@ void seed_builtins(Checker& ck, Env& env) {
     add_phrase_control("tempo", "Int");
     add_phrase_control("velocity", "Int");
     add_phrase_control("withKey", "Int");   // raw key signature in fifths (stdlib `inKey`)
+    // sustain phrase — a damper pedal (no head argument):
+    //   sustain :: Phrase t => t -> Music
+    // asMusic phrase — lift any Phrase to Music (a bare Pitch becomes a note):
+    //   asMusic :: Phrase t => t -> Music
+    for (const char* name : {"sustain", "asMusic"}) {
+        TypeId a = new_var(c); int av = c.pool[a].var;
+        Scheme s;
+        s.vars.push_back(av);
+        s.type = t_arrow(c, a, t_con0(c, "Music"));
+        s.constraints.emplace_back("Phrase", av);
+        env.push_back({name, s});
+    }
     // meter num den phrase — wrap a phrase in a time signature (two Int heads, then
     // a lifting Phrase like tempo/velocity).
     //   meter :: Phrase t => Int -> Int -> t -> Music

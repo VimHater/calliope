@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(calliope CXX)
+project(calliope CXX C)   # C is for the vendored miniz.c (.mxl unzip)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -76,6 +76,15 @@ add_executable(calliope
 )
 
 target_include_directories(calliope PRIVATE src/compiler)
+
+# MusicXML -> Calliope transcription (hoxml SAX parser + miniz for .mxl zips).
+# Light, header/.c only — always built into the compiler, no extra prebuilts.
+target_sources(calliope PRIVATE
+    src/compiler/backend/transcribe.cpp
+    third_party/libs/miniz/miniz.c)
+target_include_directories(calliope PRIVATE
+    third_party/libs/hoxml
+    third_party/libs/miniz)
 
 # Path to the Calliope standard library (loaded as a prelude before user code).
 set(CALLIOPE_STDLIB_DIR "${CMAKE_SOURCE_DIR}/standard_library")

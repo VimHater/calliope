@@ -72,15 +72,20 @@ maximum [3, 9, 2]  -- 9
 | Function | Type | Description |
 |----------|------|-------------|
 | `notes` | `[Pitch] -> [Music]` | lift a list of pitches to notes |
-| `line` | `[Music] -> Music` | play a list of phrases in sequence (`:+:`) |
-| `chord` | `[Music] -> Music` | sound a list of phrases together (`:=:`) |
+| `line` | `Phrase t => [t] -> Music` | play a list of phrases in sequence (`:+:`) |
+| `chord` | `Phrase t => [t] -> Music` | sound a list of phrases together (`:=:`) |
+| `asMusic` | `Phrase t => t -> Music` | lift one phrase to Music (a bare `Pitch` → a note); `line`/`chord` use it per element |
 | `seqn` | `Music -> Music -> Music` | sequence two phrases (named `:+:`) |
 | `par` | `Music -> Music -> Music` | layer two phrases (named `:=:`) |
 
+`line` and `chord` take a list of **phrases**, so a bare-pitch list works directly —
+no `notes` needed (each element is lifted with `asMusic`):
+
 ```
-line (notes [c', e', g'])    -- C4 :+: E4 :+: G4   (an arpeggio)
-chord (notes [c', e', g'])   -- C4 :=: E4 :=: G4   (a triad)
-melody `par` bassline        -- the two at once
+chord [c', e', g']           -- C4 :=: E4 :=: G4   (a triad, straight from pitches)
+line  [c', e', g']           -- C4 :+: E4 :+: G4   (an arpeggio)
+chord (notes [c', e', g'])   -- still fine: a [Music] list works too
+melody `par` bassline        -- two phrases at once
 ```
 
 ## Transforms
@@ -136,6 +141,7 @@ pitch lifts (`staccato c'`) and wrapping a phrase articulates every note in it.
 | `tenuto` | full length, slight stress | `1/1 · +5` |
 | `accent` | stressed (louder) | `1/1 · +15` |
 | `marcato` | marked: strong + a touch short | `3/4 · +20` |
+| `pedal` / `sustain` | damper pedal: hold notes ringing until the phrase ends | — |
 
 ```
 staccato (c' d' e' f')       -- four crisp detached notes

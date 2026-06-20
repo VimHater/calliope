@@ -1,0 +1,50 @@
+-- functional-basics.cal — the functional toolkit, no music.
+--
+-- Calliope is a Haskell-like functional language: functions are values, they
+-- curry, and programs are built by composing small ones. `main` doesn't have to
+-- be Music while experimenting — here it's an Int.
+--
+-- (Naming note: a–g, r, s are reserved as pitch literals, so names use x/y/n/fn/…)
+
+#load "prelude"
+
+-- 1. definition + application
+double x = x * 2
+
+-- 2. currying / partial application — a 2-arg function applied to one arg yields a
+--    function. `add 10` is "add ten to …".
+add x y = x + y
+addTen = add 10                     -- addTen :: Int -> Int
+
+-- 3. lambdas (anonymous functions)
+square = \x -> x * x
+
+-- 4. higher-order functions — pass functions as arguments. map / filter / foldr
+--    are ordinary stdlib functions, not built-in syntax.
+doubledEvens = map double (filter even [1, 2, 3, 4, 5, 6])   -- [4, 8, 12]
+total        = foldr add 0 doubledEvens                      -- 24
+
+-- 5. the pipe `|>` reads left-to-right (x |> f = f x): chain transforms in the
+--    order they happen instead of nesting the calls.
+piped = [1, 2, 3, 4, 5]
+  |> filter even      -- [2, 4]
+  |> map square       -- [4, 16]
+  |> foldr add 0      -- 20
+
+-- 6. local bindings: `where` (and `let … in`)
+hypotSq x y = xx + yy
+  where
+    xx = x * x
+    yy = y * y
+
+withLet = let n = 6 in n * n        -- 36
+
+-- 7. recursion — no loops; a function calls itself toward a base case
+sumTo n = if n == 0 then 0 else n + sumTo (n - 1)
+
+-- 8. functions returning functions / taking functions (compose by hand — a `.`
+--    operator isn't built in yet)
+twice fn x = fn (fn x)              -- apply fn twice
+
+main = total + piped + hypotSq 3 4 + withLet + sumTo 5 + twice double 3 + addTen 0
+-- 24 + 20 + 25 + 36 + 15 + 12 + 10 = 142

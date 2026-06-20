@@ -179,4 +179,19 @@ void run_score_tests() {
         std::vector<backend::TimedNote> na = backend::flatten(m, acc);
         CHECK(na[0].velocity == 95 && rat_eq(na[0].dur, qs));
     }
+
+    // Sustain (damper pedal): every note rings until the wrapped subtree ends.
+    {
+        music::Music m;
+        music::MusicId run = music::seq(m, music::seq(m, music::note(m, pitch(0, 0, 4), q),
+                                                         music::note(m, pitch(1, 0, 4), q)),
+                                           music::note(m, pitch(2, 0, 4), q));
+        music::MusicId ped = music::control_sustain(m, run);
+        std::vector<backend::TimedNote> ns = backend::flatten(m, ped);
+        CHECK(ns.size() == 3);
+        // span is 3 quarters = 1.5 s; each note holds from its onset to the end
+        CHECK(rat_eq(ns[0].dur, rational(3, 2)));   // 0.0 -> 1.5
+        CHECK(rat_eq(ns[1].dur, rational(1, 1)));   // 0.5 -> 1.5
+        CHECK(rat_eq(ns[2].dur, rational(1, 2)));   // 1.0 -> 1.5
+    }
 }

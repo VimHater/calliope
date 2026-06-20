@@ -69,12 +69,14 @@ void append_unit(ast::Ast& dest, const ast::Ast& unit, std::vector<ast::NodeId>&
 // synthetic `it = (<expr>)` binding for a bare REPL expression.
 void assemble(std::string_view program, const LoadOptions& opts,
               std::deque<std::string>& sources, ast::Ast& out_ast,
-              std::vector<std::string>& parse_errors,
+              std::vector<std::string>& parse_errors, std::vector<std::string>& warnings,
               std::string_view trailing = {}) {
-    // the program is its own unit (parsed first, to discover its #load directives)
+    // the program is its own unit (parsed first, to discover its #load directives).
+    // Warnings are collected only from the user's program + the REPL expr — not the
+    // prelude / #loaded units, which are assumed correct.
     sources.push_back(std::string(program));
     std::vector<std::string> program_errors;
-    ast::Ast prog_ast = parse::parse_program(lex::tokenize(sources.back()), &program_errors);
+    ast::Ast prog_ast = parse::parse_program(lex::tokenize(sources.back()), &program_errors, &warnings);
 
     std::vector<ast::Ast> loaded;
     auto load_text = [&](const std::string& text) {
@@ -105,7 +107,9 @@ void assemble(std::string_view program, const LoadOptions& opts,
     ast::Ast trailing_ast;
     if (have_trailing) {
         sources.push_back(std::string(trailing));
-        trailing_ast = parse::parse_program(lex::tokenize(sources.back()), &parse_errors);
+        std::vector<std::string> tw;
+        trailing_ast = parse::parse_program(lex::tokenize(sources.back()), &parse_errors, &tw);
+        for (const std::string& w : tw) warnings.push_back(w);
     }
 
     // merge: loaded units first (so the program can use them), then the program,
@@ -141,7 +145,7 @@ void validate_meter(Compilation& out) {
 } // namespace
 
 void compile(std::string_view program, const LoadOptions& opts, Compilation& out) {
-    assemble(program, opts, out.sources, out.ast, out.parse_errors);
+    assemble(program, opts, out.sources, out.ast, out.parse_errors, out.warnings);
     out.main_type = types::infer_named_type(out.ast, "main", out.type_errors);
     auto env = eval::eval_program(out.ast, out.interp);
     out.has_main = eval::env_lookup(env, "main", out.main_value);
@@ -153,7 +157,8 @@ std::string type_of_main(std::string_view program, const LoadOptions& opts,
                          std::vector<std::string>& errors) {
     std::deque<std::string> sources;
     ast::Ast a;
-    assemble(program, opts, sources, a, errors);
+    std::vector<std::string> warnings; // discarded: type query, not a full compile
+    assemble(program, opts, sources, a, errors, warnings);
     return types::infer_named_type(a, "main", errors);
 }
 
@@ -169,7 +174,7 @@ std::string it_binding(std::string_view expr) {
 void compile_expr(std::string_view session, std::string_view expr,
                   const LoadOptions& opts, Compilation& out) {
     std::string trailing = it_binding(expr);
-    assemble(session, opts, out.sources, out.ast, out.parse_errors, trailing);
+    assemble(session, opts, out.sources, out.ast, out.parse_errors, out.warnings, trailing);
     out.main_type = types::infer_named_type(out.ast, "it", out.type_errors);
     auto env = eval::eval_program(out.ast, out.interp);
     out.has_main = eval::env_lookup(env, "it", out.main_value);
@@ -181,8 +186,9 @@ std::string type_of_expr(std::string_view session, std::string_view expr,
                          const LoadOptions& opts, std::vector<std::string>& errors) {
     std::deque<std::string> sources;
     ast::Ast a;
+    std::vector<std::string> warnings; // discarded: type query, not a full compile
     std::string trailing = it_binding(expr);
-    assemble(session, opts, sources, a, errors, trailing);
+    assemble(session, opts, sources, a, errors, warnings, trailing);
     return types::infer_named_type(a, "it", errors);
 }
 

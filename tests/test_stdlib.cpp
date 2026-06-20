@@ -162,7 +162,15 @@ void run_stdlib_tests() {
     // triplet = tuplet 3 2: three notes in the time of two (quarter -> 1/6)
     CHECK_EQ_STR(eval::show_value(run("main = triplet (c' c' c')")),
                  "((C4:1/6 :+: C4:1/6) :+: C4:1/6)");
-    CHECK_EQ_STR(type_of("main = 0", "line"), "[Music] -> Music");
+    CHECK_EQ_STR(type_of("main = 0", "line"), "Phrase t0 => [t0] -> Music");
+    // chord / line accept a Phrase list, so a bare-pitch list works directly
+    CHECK_EQ_STR(eval::show_value(run("main = chord [c', e', g']")),
+                 "(C4:1/4 :=: (E4:1/4 :=: G4:1/4))");
+    CHECK_EQ_STR(eval::show_value(run("main = line [c', e', g']")),
+                 "(C4:1/4 :+: (E4:1/4 :+: G4:1/4))");
+    // ...and a Music list still works (asMusic is identity on Music)
+    CHECK_EQ_STR(eval::show_value(run("main = chord (notes [c', e'])")),
+                 "(C4:1/4 :=: E4:1/4)");
 
     // the headline composer example: a subject in parallel with its inversion,
     // answered up a fifth. Subject C D E G -> inverted+transposed answer G F Eb C.

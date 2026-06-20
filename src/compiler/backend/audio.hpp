@@ -32,8 +32,10 @@ struct AudioOptions {
 bool write_wav(const music::Music& m, music::MusicId root,
                const AudioOptions& opt, const std::string& path, std::string& err);
 
-// Render the same subtree and play it on the default audio output device
-// (offline render, then stream the PCM through a miniaudio playback device).
+// Render the same subtree and play it on the default audio output device. For a
+// single instrument (the common case) the render runs on a background thread while
+// playback streams behind it, so sound starts almost at once instead of waiting for
+// the whole piece to render; several instruments fall back to render-then-stream.
 // Blocks until the piece finishes. Returns false and fills `err` on failure.
 //
 // TODO(visualize): while this plays, drive a raylib window rendering the score —

@@ -40,6 +40,7 @@ cmake -S . -B build && cmake --build build
 ### Compiler — `calliope`
 
 ```sh
+./build/calliope score.mxl -o score.cal    # transcribe MusicXML (.mxl/.xml) -> Calliope
 ./build/calliope file.cal                  # render a WAV (the default: file.cal -> file.wav)
 ./build/calliope -o song.mid file.cal      # compile to a MIDI file (backend from extension)
 ./build/calliope -o song.ir file.cal       # write the Music IR text to a file
@@ -60,8 +61,17 @@ usage: calliope [options] <file.cal>
   --dump <what>   tokens | ast | types   (repeatable)
 ```
 
-`calliope` is the **compiler** — it writes files; live playback is `calliopei`'s
-job. With no `-o` and no `--emit` it renders a **WAV** (`file.cal` → `file.wav`).
+`calliope` behavior depends on the **input and output extension**. A **MusicXML
+input** (`.mxl` zip, or `.xml`/`.musicxml`) is *transcribed* to Calliope source —
+notes, chords, rests, parts and `<voice>`s (each a parallel `:=:` line), ties (`~`),
+tuplets, articulations (staccato/accent/…), ornaments (trill/mordent/turn), dynamics
+(forte/piano/…), plus `meter`/`tempo` (pitches are spelled exactly, so no `inKey` is
+added; the key is a comment) — to `-o <file>.cal`, or stdout. Element tags it still
+doesn't transcribe (slurs, repeats, lyrics, `<backup>` timing, …) are listed on
+stderr so you know what was dropped.
+Otherwise `calliope` is the **compiler** of a `.cal` program — it writes
+files; live playback is `calliopei`'s job. With no `-o` and no `--emit` it renders a
+**WAV** (`file.cal` → `file.wav`).
 The backend is otherwise chosen by the `-o` extension (or forced with `--emit`);
 `--emit midi` / `--emit wav` without `-o` derive the output name from the input.
 Backends implemented so far: **wav** (offline render — the sfizz SFZ sampler → a
@@ -124,13 +134,20 @@ implemented, so each definition must fit on one line.)
 
 ### Examples
 
-Runnable programs live in [`../examples/`](../examples): `hello.cal`,
-`reverse-notes.cal`, `transforms.cal`, `arpeggio-and-chord.cal`, the headline
-`development.cal`, the boolean/comparison tours `not-operator.cal` and
-`comparing-music.cal`, `recursion.cal` (numeric, mutual, list, and music-building
-recursion), `constraints.cal` (type-class constraints — the `=>` in a signature,
-used and inferred), `meter.cal` (time signatures + `|` barlines — strong-beat
-accent and bar-length checking), `dynamics.cal` (named loudness levels `pp`…`ff`
-over `velocity`, nested with meter and instruments), `articulation.cal`
-(staccato/legato/accent + grace notes and ornaments), and `key.cal` (key signatures
-that respell bare letters — `f` → F♯ in D major — plus diatonic transposition).
+Runnable programs live in [`../examples/`](../examples), split into two folders.
+
+**[`examples/programming/`](../examples/programming)** — the language as a general
+functional language: `functional-basics.cal` (higher-order functions, currying,
+lambdas, pipe, `where`/`let`, recursion — start here), `arithmetic.cal`,
+`factorial.cal`, `gcd.cal`, `list-math.cal` (`map`/`filter`/`foldr`),
+`not-operator.cal` (booleans), `recursion.cal` (numeric, mutual, list, and
+music-building recursion), and `constraints.cal` (type-class constraints — the `=>`
+in a signature, used and inferred).
+
+**[`examples/music/`](../examples/music)** — making music: `hello.cal` (a C-major
+scale), `reverse-notes.cal`, `transforms.cal`, `arpeggio-and-chord.cal`, the
+headline `development.cal`, `comparing-music.cal`, `pipeline.cal`, `instruments.cal`,
+`custom-instrument.cal`, `tempo-and-velocity.cal`, `meter.cal` (time signatures + `|`
+barlines), `dynamics.cal` (`pp`…`ff`), `articulation.cal` (staccato/legato/accent +
+grace notes and ornaments), and `key.cal` (key signatures that respell bare letters
+— `f` → F♯ in D major — plus diatonic transposition).

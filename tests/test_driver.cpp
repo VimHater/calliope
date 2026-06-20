@@ -109,6 +109,24 @@ void run_driver_tests() {
         CHECK(errs.empty());
     }
 
+    // a ',' glued to a pitch inside a list (octave-down, not a separator) warns —
+    // but doesn't block (warnings don't affect ok())
+    {
+        driver::Compilation c;
+        driver::compile("x = [a, b, c]\nmain = 0", none, c);
+        CHECK(!c.warnings.empty());
+    }
+    {
+        driver::Compilation c;
+        driver::compile("x = [a , b , c]\nmain = 0", none, c);  // spaced -> fine
+        CHECK(c.warnings.empty());
+    }
+    {
+        driver::Compilation c;
+        driver::compile("x = [c', e', g']\nmain = 0", none, c); // ' before sep -> fine
+        CHECK(c.warnings.empty());
+    }
+
     // directory_of is cross-platform (handles '/' and '\\')
     CHECK_EQ_STR(driver::directory_of("a/b/c.cal"), "a/b");
     CHECK_EQ_STR(driver::directory_of("a\\b\\c.cal"), "a\\b");

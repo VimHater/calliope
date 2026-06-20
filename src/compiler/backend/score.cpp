@@ -121,8 +121,23 @@ Len collect(const music::Music& m, music::MusicId id, Rational osec, Rational ob
             }
             // a fresh meter scope restarts bar accounting; other Controls keep it
             Rational child_lb = new_meter ? obeat : last_bar;
+            std::size_t first_note = out.size();
             Len r = collect(m, n.left, osec, obeat, inner, child_lb, out, errors);
             if (!new_meter) last_bar = child_lb; // continue the outer measure
+            // damper pedal: each note rings until the pedal lifts (subtree end) — but
+            // a re-struck *same* key cuts the earlier one off, so a repeated bass note
+            // under the pedal doesn't pile up overlapping copies into a loud blur.
+            if (n.sustain) {
+                Rational end = rat_add(osec, r.secs);
+                for (std::size_t k = first_note; k < out.size(); k++) {
+                    Rational stop = end;
+                    for (std::size_t j = first_note; j < out.size(); j++)
+                        if (out[j].key == out[k].key && rat_lt(out[k].start, out[j].start) &&
+                            rat_lt(out[j].start, stop))
+                            stop = out[j].start;
+                    out[k].dur = rat_sub(stop, out[k].start);
+                }
+            }
             return r;
         }
         case music::MusicKind::Barline: {

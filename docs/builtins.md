@@ -156,6 +156,7 @@ notation — so use `myCello`, `nylon`, `cello2`, …)
 | `meter` | `Phrase t => Int -> Int -> t -> Music` | wrap a phrase in a time signature (`meter 3 4 …`) |
 | `articulate` | `Phrase t => Rational -> Int -> t -> Music` | a performance gate + accent: each note *sounds* for `gate · its duration` (the slot is unchanged) and its velocity shifts by the accent. The stdlib wraps it as `staccato`/`legato`/`accent`/… |
 | `withKey` | `Phrase t => Int -> t -> Music` | apply a key signature (in **fifths**, + sharps / − flats): resolve the floating accidentals in the phrase to the key and tag the signature. The stdlib `inKey` (with `major`/`minor`) is the friendly form |
+| `sustain` | `Phrase t => t -> Music` | a damper pedal: every note in the phrase rings until the phrase ends (the timing pass extends each note's sounding length to the span's end) |
 
 All three are `Control` nodes, like instruments — they wrap a sub-phrase and apply
 only within it (an inner one overrides an outer). Tempo is resolved into real time,

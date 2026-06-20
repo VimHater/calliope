@@ -45,6 +45,7 @@ std::string default_soundfont() {
 }
 
 void print_errors(const driver::Compilation& c) {
+    for (const std::string& w : c.warnings)       std::fprintf(stderr, "warning: %s\n", w.c_str());
     for (const std::string& e : c.parse_errors)   std::fprintf(stderr, "parse error: %s\n", e.c_str());
     for (const std::string& e : c.type_errors)    std::fprintf(stderr, "type error: %s\n", e.c_str());
     for (const std::string& e : c.runtime_errors) std::fprintf(stderr, "runtime error: %s\n", e.c_str());

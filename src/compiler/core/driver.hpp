@@ -33,6 +33,7 @@ struct Compilation {
     std::vector<std::string> parse_errors;
     std::vector<std::string> type_errors;
     std::vector<std::string> runtime_errors;
+    std::vector<std::string> warnings;        // non-fatal advice (don't affect ok())
 };
 
 // How `#load` is resolved for one compilation.

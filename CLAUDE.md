@@ -41,13 +41,16 @@ Frontend first cut exists; nothing executes music yet.
   (`calliope::cli`), so `compiler.cpp` / `calliopei.cpp` are just arg parsing +
   orchestration.
 - `src/compiler/calliope.cpp` — `calliope` is the **compiler** (files only; no live
-  playback — that's `calliopei`'s job). `-o <file>` picks the backend by extension
+  playback — that's `calliopei`'s job). **Behavior keys off the input *and* output
+  extension.** A **MusicXML input** (`.mxl`/`.xml`/`.musicxml`) is *transcribed* to
+  Calliope source (`backend/transcribe`) — `-o <out>.cal`, or stdout with no `-o`.
+  A **`.cal` input** compiles as before: `-o <file>` picks the backend by extension
   (`.mid`/`.midi` → MIDI, `.wav` → audio, `.ir` → Music IR text; `.mp3`/`.mp4`
   recognized too); `--emit ir|midi|wav` forces it; **with neither, the default is
   WAV** (`song.cal` → `song.wav`). `--emit midi`/`--emit wav` with no `-o` derives
   the name. `--soundfont <file.sfz>` picks the audio instrument (defaults to the
-  bundled SSO Grand Piano); `mp3`/`mp4`/`musicxml` are recognized but still error
-  ("not implemented"). **`--debug` prints the evaluated Music IR to stdout (emits no
+  bundled SSO Grand Piano); `mp3`/`mp4` are recognized but still error ("not
+  implemented"). **`--debug` prints the evaluated Music IR to stdout (emits no
   file)**; `--dump tokens|ast|types` for lexer/parser/type debug.
 - `src/compiler/backend/score.{hpp,cpp}` — **shared timing seam** (`calliope::backend
   ::flatten`): walks the Music tree (Seq concatenates, Par overlays, Rest advances)
@@ -73,8 +76,10 @@ Frontend first cut exists; nothing executes music yet.
   Linux); other binaries report it unavailable. **Two outputs share one renderer**
   (`render_master` → interleaved stereo f32): `write_wav` encodes it to a file;
   **`play`** (live) streams it through a **miniaudio playback device** (`ma_device`,
-  f32 callback over an atomic cursor) — render-then-stream, blocks until the piece
-  drains. **`calliopei`** drives it (`calliopei file.cal` plays; `:play` in the REPL)
+  f32 callback over an atomic cursor). A single instrument renders on a **background
+  thread** while playback streams behind it (an atomic `ready` fence) — so sound
+  starts after just the sfizz sample preload, not the whole render; several
+  instruments fall back to render-then-stream. Blocks until the piece drains. **`calliopei`** drives it (`calliopei file.cal` plays; `:play` in the REPL)
   via `cli::play` — `calliope` (the compiler) does not play, only writes files. The audio
   backend is now linked into **both** `calliope` and `calliopei` (CMake
   `calliope_add_audio`); `miniaudio_impl.cpp` keeps the device-I/O layer (only the
@@ -207,7 +212,9 @@ hold each note for `gate · duration` (sounding ≠ slot, so staccato is short w
 gap) and adds the accent to velocity — or **`key` (signature in fifths)**: `inKey`
 resolves the *floating* (bare-letter) accidentals in its subtree to the key (`f` →
 F# in D major) at construction (`music::apply_key`) and tags the Control for
-engraving. Named **dynamics** and **articulations** are stdlib over `velocity` /
+engraving — or **`sustain` (damper pedal)**: `flatten` holds every note in the
+subtree ringing until the subtree ends (extends each sounding length to the span
+end). Named **dynamics** and **articulations** are stdlib over `velocity` /
 `articulate`; **grace notes / ornaments / scales / diatonic transforms** are stdlib.
 `Instrument` is a typed
 enum of builtin nullary constructors (`Cello`, `Flute`, … like the `Interval`
@@ -379,6 +386,7 @@ src/compiler/
     visualize.hpp       TODO stub: raylib score view (DAW / piano modes), synced to play
     miniaudio_impl.cpp  the one TU that compiles MINIAUDIO_IMPLEMENTATION
     tsf_impl.cpp        the one TU that compiles TSF_IMPLEMENTATION (SF2 fallback synth)
+    transcribe.{hpp,cpp} MusicXML (.mxl/.xml) → Calliope source (hoxml SAX + miniz unzip)
 standard_library/
   prelude.cal           stdlib in Calliope: list commons + music transforms
                         (line/chord/transpose/invert/retrograde/times/…)
@@ -388,8 +396,8 @@ third_party/libs/
   tsf.h               TinySoundFont, header-only SF2 synth (playback)
   miniaudio.h         audio output / device layer
   raylib/             graphics — live notation / piano-roll view
-  hoxml/              MusicXML *parser* (note: we need a writer for output)
-  miniz               zip (de)compression (e.g. .mxl, compressed SF2)
+  hoxml/              MusicXML *parser* (SAX) — used by backend/transcribe (import)
+  miniz               zip (de)compression — used to unzip `.mxl` in transcribe
 third_party/fonts/        UI font (Zed Mono Nerd Font)
 third_party/soundfonts/   instrument samples for playback (sso/ auto-fetched, gitignored)
 cmake/

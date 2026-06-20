@@ -54,7 +54,8 @@ enum BuiltinId {
     B_MLEFT, B_MRIGHT,
     B_TUPLET,
     B_WITHINST, B_SFZ, B_GM,
-    B_TEMPO, B_VELOCITY, B_METER, B_ARTICULATE, B_WITHKEY,
+    B_TEMPO, B_VELOCITY, B_METER, B_ARTICULATE, B_WITHKEY, B_SUSTAIN,
+    B_ASMUSIC,
 };
 
 struct BuiltinInfo { const char* name; int id; int arity; };
@@ -87,6 +88,8 @@ const BuiltinInfo kBuiltins[] = {
     {"meter", B_METER, 3},
     {"articulate", B_ARTICULATE, 3},
     {"withKey", B_WITHKEY, 2},
+    {"sustain", B_SUSTAIN, 1},
+    {"asMusic", B_ASMUSIC, 1},
 };
 
 // Interval name -> (diatonic steps, semitones). Enough common ones to be useful.
@@ -405,6 +408,12 @@ Value call_builtin(Interp& I, int id, std::vector<Value>& a) {
             music::MusicId resolved = music::apply_key(*I.music, fifths, child);
             return music_value(I, music::control_key(*I.music, fifths, resolved));
         }
+        // ---- sustain: a damper pedal over a phrase --------------------------
+        case B_SUSTAIN:
+            return music_value(I, music::control_sustain(*I.music, to_music(I, a[0])));
+        // ---- asMusic: lift any Phrase (Pitch -> Note, Music -> itself) ------
+        case B_ASMUSIC:
+            return music_value(I, to_music(I, a[0]));
     }
     I.errors.push_back("unknown builtin");
     return v_unit();

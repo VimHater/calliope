@@ -157,6 +157,19 @@ bool can_start_arg(Parser& p) {
 }
 
 // ---- compound primaries -------------------------------------------------
+// Does a subtree contain a pitch literal that ate a `,` octave-down mark? Such a
+// pitch *inside a list* is almost always a misused separator — `[a, b, c]` lexes
+// `a,` as A2 and the commas vanish, so the list is one run, not three pitches.
+bool subtree_has_octave_comma_pitch(const Parser& p, NodeId id) {
+    if (id == ast::NoNode) return false;
+    const Node& n = p.ast.nodes[id];
+    if (n.kind == NodeKind::PitchLit && n.tok.text.find(',') != std::string_view::npos)
+        return true;
+    for (NodeId k : n.kids)
+        if (subtree_has_octave_comma_pitch(p, k)) return true;
+    return false;
+}
+
 NodeId parse_list(Parser& p) {
     Token open = cur(p);
     advance(p); // [
@@ -179,6 +192,19 @@ NodeId parse_list(Parser& p) {
     p.margin = saved;
     if (cur(p).kind == TokenKind::RBracket) advance(p);
     else error(p, "expected ']'");
+
+    // a `,` glued to a pitch inside a list is read as octave-down, not a separator
+    for (NodeId k : n.kids) {
+        if (subtree_has_octave_comma_pitch(p, k)) {
+            char buf[200];
+            std::snprintf(buf, sizeof buf,
+                "%d:%d: a ',' touching a pitch in this list is read as octave-down "
+                "(`c,` = C2), not a separator; put a space before each comma: [a , b , c]",
+                open.line, open.col);
+            p.warnings.emplace_back(buf);
+            break;
+        }
+    }
     return ast_add(p.ast, n);
 }
 
@@ -789,7 +815,8 @@ NodeId parse_toplevel(Parser& p) {
 
 } // namespace
 
-ast::Ast parse_program(std::vector<Token> toks, std::vector<std::string>* errors_out) {
+ast::Ast parse_program(std::vector<Token> toks, std::vector<std::string>* errors_out,
+                       std::vector<std::string>* warnings_out) {
     Parser p;
     p.toks = std::move(toks);
 
@@ -803,6 +830,7 @@ ast::Ast parse_program(std::vector<Token> toks, std::vector<std::string>* errors
     p.ast.root = ast_add(p.ast, prog);
 
     if (errors_out) *errors_out = p.errors;
+    if (warnings_out) *warnings_out = p.warnings;
     return std::move(p.ast);
 }
 

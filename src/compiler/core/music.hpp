@@ -35,6 +35,8 @@
 //   • key        — a key signature (`has_key`, `key_fifths` ∈ [-7,7], + = sharps);
 //                  `inKey` resolves floating accidentals in its subtree to the key
 //                  *at construction* and records the signature here for engraving
+//   • sustain    — a damper pedal (`sustain` flag): the timing pass holds every
+//                  note in the subtree ringing until the subtree ends
 // The payload stays abstract here; the flatten seam / backends resolve it. Note
 // durations are exact `Rational` whole-note fractions (quarter = 1/4), per spec O11.
 //
@@ -66,6 +68,7 @@ struct MusicNode {
     int accent = 0;              // Control: articulation velocity delta
     bool has_key = false;        // Control: a key signature is set here
     int key_fifths = 0;          // Control: key signature in fifths (-7..7, + = sharps)
+    bool sustain = false;        // Control: damper pedal — hold notes to the subtree end
 };
 
 struct Music {
@@ -95,6 +98,7 @@ int key_accidental(int fifths, int letter);
 // then wraps the result in a key Control node for engraving metadata.
 MusicId apply_key(Music& m, int fifths, MusicId id);
 MusicId control_key(Music& m, int fifths, MusicId child);
+MusicId control_sustain(Music& m, MusicId child);        // damper pedal
 
 // Transpose every Note in the subtree by (diatonic steps, semitones); Rests and
 // structure are preserved. Returns a fresh subtree (input is left untouched).

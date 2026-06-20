@@ -106,6 +106,14 @@ MusicId control_key(Music& m, int fifths, MusicId child) {
     return add(m, n);
 }
 
+MusicId control_sustain(Music& m, MusicId child) {
+    MusicNode n;
+    n.kind = MusicKind::Control;
+    n.sustain = true;
+    n.left = child;
+    return add(m, n);
+}
+
 MusicId barline(Music& m) {
     MusicNode n;
     n.kind = MusicKind::Barline;
@@ -141,6 +149,7 @@ MusicId rewrap_control(Music& m, const MusicNode& src, MusicId child) {
     n.accent = src.accent;
     n.has_key = src.has_key;
     n.key_fifths = src.key_fifths;
+    n.sustain = src.sustain;
     n.left = child;
     return add(m, n);
 }
@@ -246,6 +255,7 @@ bool equal(const Music& m, MusicId a, MusicId b) {
                    na.meter_num == nb.meter_num && na.meter_den == nb.meter_den &&
                    rat_eq(na.gate, nb.gate) && na.accent == nb.accent &&
                    na.has_key == nb.has_key && na.key_fifths == nb.key_fifths &&
+                   na.sustain == nb.sustain &&
                    equal(m, na.left, nb.left);
         case MusicKind::Barline:
             return true; // kinds already match; barlines carry no data
@@ -303,7 +313,8 @@ MusicId tie(Music& m, MusicId a, MusicId b, bool& ok) {
                 na.gm != nb.gm || na.tempo != nb.tempo || na.velocity != nb.velocity ||
                 na.meter_num != nb.meter_num || na.meter_den != nb.meter_den ||
                 !rat_eq(na.gate, nb.gate) || na.accent != nb.accent ||
-                na.has_key != nb.has_key || na.key_fifths != nb.key_fifths) {
+                na.has_key != nb.has_key || na.key_fifths != nb.key_fifths ||
+                na.sustain != nb.sustain) {
                 ok = false;
                 return NoMusic;
             }
@@ -352,6 +363,8 @@ std::string show(const Music& m, MusicId id) {
                        ", " + show(m, n.left) + ")";
             if (n.has_key)
                 return "key(" + std::to_string(n.key_fifths) + ", " + show(m, n.left) + ")";
+            if (n.sustain)
+                return "ped(" + show(m, n.left) + ")";
             std::string name;
             if (!n.sfz_path.empty()) name = "\"" + n.sfz_path + "\"";
             else if (n.gm >= 0) name = "gm " + std::to_string(n.gm);

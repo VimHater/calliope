@@ -89,6 +89,19 @@ note (no space): `<c e g>`. A spaced `<` is the comparison operator, so `a < b`
 compares the pitches `a` and `b` (it does not start a chord). To pass a chord as a
 function argument, parenthesise it: `f (<c e g>)`.
 
+**`,` in a list — always put a space before it.** A `,` that *hugs* a pitch is the
+octave-down mark (`c,` = C2), so `[a, b, c]` lexes as `a,`(A2) `b,`(B2) `c`(C3) — the
+commas vanish and you get a **one-element** list holding the run `A2 B2 C3`, not three
+pitches. Write a space before each comma so it stays a separator:
+
+```
+[a, b, c]     -- WRONG: [ (A2 B2 C3) ] — one element (commas eaten as octave marks)
+[a , b , c]   -- a 3-element list [A3, B3, C3]
+[c', e', g']  -- also fine: the separator follows ' or a digit, so it can't attach
+```
+
+(A bare `[a, b, c]` raises a `warning:` pointing this out.)
+
 ## Bindings
 
 ```

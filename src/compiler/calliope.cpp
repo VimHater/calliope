@@ -1,8 +1,10 @@
+#include "backend/transcribe.hpp"
 #include "core/driver.hpp"
 #include "helper.hpp"
 
 #include <cstdio>
 #include <cstring>
+#include <fstream>
 #include <string>
 
 // Calliope compiler CLI (`calliope`) — a thin I/O shell over calliope::driver.
@@ -18,10 +20,14 @@ using calliope::cli::Emit;
 
 void usage(const char* prog) {
     std::fprintf(stderr,
-        "usage: %s [options] <file.cal>\n"
+        "usage: %s [options] <input>\n"
+        "\n"
+        "  input is a .cal program, or a MusicXML score (.mxl/.xml/.musicxml) which\n"
+        "  is transcribed to Calliope source (-o <file>.cal, or stdout).\n"
         "\n"
         "  -o <file>       write output to <file>; the backend is chosen by its\n"
-        "                  extension (.mid/.midi = MIDI, .wav = audio, .ir = Music IR)\n"
+        "                  extension (.mid/.midi = MIDI, .wav = audio, .ir = Music IR,\n"
+        "                  .cal = transcription target)\n"
         "  --emit <fmt>    force the backend: ir | midi | wav (overrides the extension)\n"
         "  --soundfont <f> .sfz instrument for the audio (wav) backend\n"
         "                  (default: the bundled SSO Grand Piano)\n"
@@ -82,6 +88,32 @@ int main(int argc, char** argv) {
     }
 
     if (!input) { usage(argv[0]); return 2; }
+
+    // Input-extension dispatch: a MusicXML score (.mxl/.xml/.musicxml) is
+    // transcribed to Calliope source (the output must be .cal; no -o = stdout).
+    {
+        std::string in_ext = calliope::cli::ext_of(input);
+        if (in_ext == "mxl" || in_ext == "xml" || in_ext == "musicxml") {
+            if (!out_path.empty()) {
+                std::string oe = calliope::cli::ext_of(out_path);
+                if (oe != "cal") {
+                    std::fprintf(stderr, "error: MusicXML transcribes to .cal (got .%s)\n", oe.c_str());
+                    return 2;
+                }
+            }
+            std::string text, err;
+            if (!calliope::transcribe::musicxml_to_calliope(input, text, err)) {
+                std::fprintf(stderr, "error: %s\n", err.c_str());
+                return 1;
+            }
+            if (out_path.empty()) { std::fputs(text.c_str(), stdout); return 0; }
+            std::ofstream f(out_path, std::ios::binary);
+            if (!f) { std::fprintf(stderr, "error: cannot write '%s'\n", out_path.c_str()); return 1; }
+            f << text;
+            std::fprintf(stderr, "wrote %s\n", out_path.c_str());
+            return 0;
+        }
+    }
 
     std::string src = calliope::cli::read_file(input);
     if (src.empty()) {

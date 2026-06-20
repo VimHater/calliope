@@ -27,7 +27,7 @@
 
 -- a .sfz sampler patch (audio-only)
 harp :: Instrument
-harp = sfz "../third_party/soundfonts/sso/Sonatina Symphonic Orchestra/Concert Harp.sfz"
+harp = sfz "../../third_party/soundfonts/sso/Sonatina Symphonic Orchestra/Concert Harp.sfz"
 
 -- a raw GM voice (24 = nylon guitar); works in MIDI and audio
 guitar :: Instrument

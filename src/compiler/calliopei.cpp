@@ -77,6 +77,7 @@ void repl_show_type(const std::string& session, const std::string& expr) {
 void repl_eval(const std::string& session, const std::string& expr) {
     calliope::driver::Compilation c;
     calliope::driver::compile_expr(session, expr, repl_opts(), c);
+    for (const std::string& w : c.warnings) std::printf("  warning: %s\n", w.c_str());
     if (!c.parse_errors.empty()) {
         for (const std::string& e : c.parse_errors) std::printf("  parse error: %s\n", e.c_str());
         return; // don't report a value/type for something that didn't parse

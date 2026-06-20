@@ -152,11 +152,13 @@ notes :: [Pitch] -> [Music]
 notes pitches = map note pitches
 
 -- play / stack a list of phrases
-line :: [Music] -> Music
-line phrases = foldr1 sequence phrases     -- play in sequence  (a :+: b :+: ...)
+-- play / stack a list of phrases. Each element is a Phrase, so a bare-pitch list
+-- works directly: `line [c', e', g']` or `chord [c', e', g']` (asMusic lifts each).
+line :: Phrase t => [t] -> Music
+line phrases = foldr1 sequence (map asMusic phrases)     -- in sequence (a :+: b :+: …)
 
-chord :: [Music] -> Music
-chord phrases = foldr1 parallel phrases     -- sound together    (a :=: b :=: ...)
+chord :: Phrase t => [t] -> Music
+chord phrases = foldr1 parallel (map asMusic phrases)    -- together    (a :=: b :=: …)
 
 -- combine two phrases: in sequence / in parallel (handy as `x `par` y`)
 seqn :: Music -> Music -> Music
@@ -275,6 +277,10 @@ accent phrase = articulate (1/1) 15 phrase
 
 marcato :: Phrase t => t -> Music      -- marked: strong and a touch short
 marcato phrase = articulate (3/4) 20 phrase
+
+-- damper pedal: hold every note in the phrase ringing until it ends (`sustain`)
+pedal :: Phrase t => t -> Music
+pedal phrase = sustain phrase
 
 -- ===========================================================================
 -- Grace notes — a quick ornamental note stealing time from the main note. Both
