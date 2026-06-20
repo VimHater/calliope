@@ -629,6 +629,7 @@ void seed_builtins(Checker& ck, Env& env) {
     add_phrase_control("withInstrument", "Instrument");
     add_phrase_control("tempo", "Int");
     add_phrase_control("velocity", "Int");
+    add_phrase_control("withKey", "Int");   // raw key signature in fifths (stdlib `inKey`)
     // meter num den phrase — wrap a phrase in a time signature (two Int heads, then
     // a lifting Phrase like tempo/velocity).
     //   meter :: Phrase t => Int -> Int -> t -> Music
@@ -734,6 +735,7 @@ void seed_builtins(Checker& ck, Env& env) {
     add_mono("makePitch", t_arrow(c, tInt(), t_arrow(c, tInt(), tPit())));
     add_mono("diatonicStep", t_arrow(c, tPit(), tInt()));
     add_mono("chromaticOf", t_arrow(c, tInt(), tInt()));
+    add_mono("keyAccidental", t_arrow(c, tInt(), t_arrow(c, tInt(), tInt())));
     add_mono("note", t_arrow(c, tPit(), tMusic()));
     add_mono("noteWith", t_arrow(c, tPit(), t_arrow(c, tRat(), tMusic())));
     add_mono("noteDur", t_arrow(c, tMusic(), tRat()));

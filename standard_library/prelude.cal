@@ -319,3 +319,82 @@ turn tone =
     unit = noteDur (note tone) * (1/4)
     hi   = tone ^+ M2
     lo   = tone ^- M2
+
+-- ===========================================================================
+-- Keys & scales — a key signature respells the *floating* (bare) accidentals in a
+-- phrase: in D major a bare `f` sounds F#, while an explicit `fis`/`fes` is left
+-- alone. A key is just its signature in fifths (+ = sharps, - = flats); `major` /
+-- `minor` compute it from a tonic; `inKey` applies it (and tags the signature).
+-- ===========================================================================
+
+-- the natural circle-of-fifths position of a diatonic letter (C=0 .. B=6)
+naturalFifths :: Int -> Int
+naturalFifths letter =
+  if letter == 0 then 0              -- C
+  else if letter == 1 then 2         -- D
+  else if letter == 2 then 4         -- E
+  else if letter == 3 then negate 1  -- F
+  else if letter == 4 then 1         -- G
+  else if letter == 5 then 3         -- A
+  else 5                             -- B
+
+-- the letter (0..6) and accidental (semitones) of a pitch
+pitchLetter :: Pitch -> Int
+pitchLetter tone = mod (diatonicStep tone) 7
+
+pitchAccidental :: Pitch -> Int
+pitchAccidental tone = semitones tone - chromaticOf (diatonicStep tone)
+
+-- key signature (in fifths) of the major / minor key on a tonic
+major :: Pitch -> Int
+major tone = naturalFifths (pitchLetter tone) + 7 * pitchAccidental tone
+
+minor :: Pitch -> Int
+minor tone = major tone - 3
+
+-- play a phrase in a key: its floating accidentals snap to the key (`major`/`minor`
+-- give the signature `k`). A bare pitch lifts, so `inKey (major D) c` works.
+inKey :: Phrase t => Int -> t -> Music
+inKey k phrase = withKey k phrase
+
+-- a pitch at absolute diatonic step `step`, spelled for the key `k`
+keyPitch :: Int -> Int -> Pitch
+keyPitch k step = makePitch step (keyAccidental k (mod step 7))
+
+-- the nth degree (1 = tonic) of the major key on tonic `tone`
+scaleDegree :: Pitch -> Int -> Pitch
+scaleDegree tone n = keyPitch (major tone) (diatonicStep tone + (n - 1))
+
+-- diatonic transpose: shift every pitch by `n` scale steps, respelled for key `k`
+diatonicUp :: Int -> Int -> Music -> Music
+diatonicUp k n phrase = mapPitches (\tone -> keyPitch k (diatonicStep tone + n)) phrase
+
+diatonicDown :: Int -> Int -> Music -> Music
+diatonicDown k n phrase = diatonicUp k (negate n) phrase
+
+-- key-aware ornaments: the neighbour is the next/previous scale note in key `k`
+-- (and the main note is snapped to the key too), not a fixed whole step.
+trillIn :: Int -> Pitch -> Music
+trillIn k tone =
+  noteWith main unit :+: (noteWith hi unit :+: (noteWith main unit :+: noteWith hi unit))
+  where
+    unit = noteDur (note tone) * (1/4)
+    main = keyPitch k (diatonicStep tone)
+    hi   = keyPitch k (diatonicStep tone + 1)
+
+mordentIn :: Int -> Pitch -> Music
+mordentIn k tone =
+  noteWith main unit :+: (noteWith hi unit :+: noteWith main (noteDur (note tone) - unit - unit))
+  where
+    unit = noteDur (note tone) * (1/4)
+    main = keyPitch k (diatonicStep tone)
+    hi   = keyPitch k (diatonicStep tone + 1)
+
+turnIn :: Int -> Pitch -> Music
+turnIn k tone =
+  noteWith hi unit :+: (noteWith main unit :+: (noteWith lo unit :+: noteWith main unit))
+  where
+    unit = noteDur (note tone) * (1/4)
+    main = keyPitch k (diatonicStep tone)
+    hi   = keyPitch k (diatonicStep tone + 1)
+    lo   = keyPitch k (diatonicStep tone - 1)

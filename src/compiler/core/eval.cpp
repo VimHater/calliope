@@ -46,7 +46,7 @@ enum BuiltinId {
     B_SEMITONES,
     B_NULL, B_HEAD, B_TAIL, B_CONS,
     // pitch projections (axioms the stdlib builds pitch transforms on)
-    B_MKPITCH, B_DIASTEP, B_CHROMOF,
+    B_MKPITCH, B_DIASTEP, B_CHROMOF, B_KEYACC,
     // Music IR axioms: constructors, predicates, accessors
     B_NOTE, B_NOTEWITH, B_NOTEDUR, B_NOTEPITCH,
     B_SEQM, B_PARM,
@@ -54,7 +54,7 @@ enum BuiltinId {
     B_MLEFT, B_MRIGHT,
     B_TUPLET,
     B_WITHINST, B_SFZ, B_GM,
-    B_TEMPO, B_VELOCITY, B_METER, B_ARTICULATE,
+    B_TEMPO, B_VELOCITY, B_METER, B_ARTICULATE, B_WITHKEY,
 };
 
 struct BuiltinInfo { const char* name; int id; int arity; };
@@ -71,6 +71,7 @@ const BuiltinInfo kBuiltins[] = {
     {"null", B_NULL, 1}, {"head", B_HEAD, 1}, {"tail", B_TAIL, 1},
     {"cons", B_CONS, 2}, {":", B_CONS, 2},
     {"makePitch", B_MKPITCH, 2}, {"diatonicStep", B_DIASTEP, 1}, {"chromaticOf", B_CHROMOF, 1},
+    {"keyAccidental", B_KEYACC, 2},
     {"note", B_NOTE, 1}, {"noteWith", B_NOTEWITH, 2},
     {"noteDur", B_NOTEDUR, 1}, {"notePitch", B_NOTEPITCH, 1},
     {"sequence", B_SEQM, 2}, {"parallel", B_PARM, 2},
@@ -85,6 +86,7 @@ const BuiltinInfo kBuiltins[] = {
     {"velocity", B_VELOCITY, 2},
     {"meter", B_METER, 3},
     {"articulate", B_ARTICULATE, 3},
+    {"withKey", B_WITHKEY, 2},
 };
 
 // Interval name -> (diatonic steps, semitones). Enough common ones to be useful.
@@ -261,6 +263,8 @@ Value call_builtin(Interp& I, int id, std::vector<Value>& a) {
         case B_MKPITCH:   return v_pitch(mk_pitch(static_cast<int>(a[0].i), static_cast<int>(a[1].i)));
         case B_DIASTEP:   return v_int(diatonic_step(a[0].pitch));
         case B_CHROMOF:   return v_int(chromatic_of(static_cast<int>(a[0].i)));
+        case B_KEYACC:    return v_int(music::key_accidental(static_cast<int>(a[0].i),
+                                                            static_cast<int>(a[1].i)));
 
         // ---- Music constructors -----------------------------------------
         case B_NOTE: {
@@ -392,6 +396,15 @@ Value call_builtin(Interp& I, int id, std::vector<Value>& a) {
             music::MusicId child = to_music(I, a[2]);
             return music_value(I, music::control_articulate(*I.music, gate, acc, child));
         }
+        // ---- withKey: resolve floating accidentals to the key, tag the signature ----
+        case B_WITHKEY: {
+            int fifths = static_cast<int>(a[0].i);
+            if (fifths < -7) fifths = -7;
+            if (fifths > 7) fifths = 7;
+            music::MusicId child = to_music(I, a[1]);
+            music::MusicId resolved = music::apply_key(*I.music, fifths, child);
+            return music_value(I, music::control_key(*I.music, fifths, resolved));
+        }
     }
     I.errors.push_back("unknown builtin");
     return v_unit();
@@ -432,6 +445,8 @@ void decode_pitch(std::string_view t, Pitch& out_p, Rational& out_dur) {
     while (i < t.size() && t[i] == '\'') { octave++; i++; }
     while (i < t.size() && t[i] == ',')  { octave--; i++; }
     out_p = pitch(li, accidental, octave);
+    // no explicit is/es -> a floating natural an `inKey` may respell to the key
+    out_p.floating = (accidental == 0);
     decode_dur(t, i, out_dur);
 }
 

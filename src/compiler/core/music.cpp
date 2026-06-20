@@ -97,11 +97,32 @@ MusicId control_articulate(Music& m, Rational gate, int accent, MusicId child) {
     return add(m, n);
 }
 
+MusicId control_key(Music& m, int fifths, MusicId child) {
+    MusicNode n;
+    n.kind = MusicKind::Control;
+    n.has_key = true;
+    n.key_fifths = fifths;
+    n.left = child;
+    return add(m, n);
+}
+
 MusicId barline(Music& m) {
     MusicNode n;
     n.kind = MusicKind::Barline;
     return add(m, n);
 }
+
+int key_accidental(int fifths, int letter) {
+    // letters as indices C=0 D=1 E=2 F=3 G=4 A=5 B=6
+    static const int sharp_order[7] = {3, 0, 4, 1, 5, 2, 6}; // F C G D A E B
+    static const int flat_order[7]  = {6, 2, 5, 1, 4, 0, 3}; // B E A D G C F
+    if (fifths > 0)
+        for (int k = 0; k < fifths && k < 7; k++) if (sharp_order[k] == letter) return 1;
+    if (fifths < 0)
+        for (int k = 0; k < -fifths && k < 7; k++) if (flat_order[k] == letter) return -1;
+    return 0;
+}
+
 
 namespace {
 // Rebuild a Control over a new child, preserving every control axis. Used by the
@@ -118,6 +139,8 @@ MusicId rewrap_control(Music& m, const MusicNode& src, MusicId child) {
     n.meter_den = src.meter_den;
     n.gate = src.gate;
     n.accent = src.accent;
+    n.has_key = src.has_key;
+    n.key_fifths = src.key_fifths;
     n.left = child;
     return add(m, n);
 }
@@ -147,6 +170,31 @@ MusicId transpose(Music& m, MusicId id, int dstep, int dsemi) {
         }
         case MusicKind::Control:
             return rewrap_control(m, n, transpose(m, n.left, dstep, dsemi));
+        case MusicKind::Barline:
+            return barline(m);
+    }
+    return NoMusic;
+}
+
+MusicId apply_key(Music& m, int fifths, MusicId id) {
+    if (id == NoMusic) return NoMusic;
+    MusicNode n = m.nodes[id]; // copy: add() may reallocate the pool mid-recursion
+    switch (n.kind) {
+        case MusicKind::Note: {
+            if (!n.pitch.floating) return note(m, n.pitch, n.dur);
+            Pitch p = n.pitch;
+            p.accidental = key_accidental(fifths, p.letter);
+            p.floating = false;     // now fixed by the key
+            return note(m, p, n.dur);
+        }
+        case MusicKind::Rest:
+            return rest(m, n.dur);
+        case MusicKind::Seq:
+            return seq(m, apply_key(m, fifths, n.left), apply_key(m, fifths, n.right));
+        case MusicKind::Par:
+            return par(m, apply_key(m, fifths, n.left), apply_key(m, fifths, n.right));
+        case MusicKind::Control:
+            return rewrap_control(m, n, apply_key(m, fifths, n.left));
         case MusicKind::Barline:
             return barline(m);
     }
@@ -197,6 +245,7 @@ bool equal(const Music& m, MusicId a, MusicId b) {
                    na.gm == nb.gm && na.tempo == nb.tempo && na.velocity == nb.velocity &&
                    na.meter_num == nb.meter_num && na.meter_den == nb.meter_den &&
                    rat_eq(na.gate, nb.gate) && na.accent == nb.accent &&
+                   na.has_key == nb.has_key && na.key_fifths == nb.key_fifths &&
                    equal(m, na.left, nb.left);
         case MusicKind::Barline:
             return true; // kinds already match; barlines carry no data
@@ -253,7 +302,8 @@ MusicId tie(Music& m, MusicId a, MusicId b, bool& ok) {
             if (na.instrument != nb.instrument || na.sfz_path != nb.sfz_path ||
                 na.gm != nb.gm || na.tempo != nb.tempo || na.velocity != nb.velocity ||
                 na.meter_num != nb.meter_num || na.meter_den != nb.meter_den ||
-                !rat_eq(na.gate, nb.gate) || na.accent != nb.accent) {
+                !rat_eq(na.gate, nb.gate) || na.accent != nb.accent ||
+                na.has_key != nb.has_key || na.key_fifths != nb.key_fifths) {
                 ok = false;
                 return NoMusic;
             }
@@ -300,6 +350,8 @@ std::string show(const Music& m, MusicId id) {
             if (n.gate.num > 0)
                 return "art(" + show_dur(n.gate) + "," + std::to_string(n.accent) +
                        ", " + show(m, n.left) + ")";
+            if (n.has_key)
+                return "key(" + std::to_string(n.key_fifths) + ", " + show(m, n.left) + ")";
             std::string name;
             if (!n.sfz_path.empty()) name = "\"" + n.sfz_path + "\"";
             else if (n.gm >= 0) name = "gm " + std::to_string(n.gm);

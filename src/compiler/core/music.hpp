@@ -32,6 +32,9 @@
 //   • articulation — a performance gate (`gate` sounding-length factor, num > 0 means
 //                  set: staccato = 1/2, legato = 1/1) + an `accent` velocity delta;
 //                  the timing pass shortens the sounding note and adjusts velocity
+//   • key        — a key signature (`has_key`, `key_fifths` ∈ [-7,7], + = sharps);
+//                  `inKey` resolves floating accidentals in its subtree to the key
+//                  *at construction* and records the signature here for engraving
 // The payload stays abstract here; the flatten seam / backends resolve it. Note
 // durations are exact `Rational` whole-note fractions (quarter = 1/4), per spec O11.
 //
@@ -61,6 +64,8 @@ struct MusicNode {
     int meter_den = -1;          // Control: time-signature denominator (-1 = unset)
     Rational gate;               // Control: articulation sounding-length factor (num 0 = unset)
     int accent = 0;              // Control: articulation velocity delta
+    bool has_key = false;        // Control: a key signature is set here
+    int key_fifths = 0;          // Control: key signature in fifths (-7..7, + = sharps)
 };
 
 struct Music {
@@ -80,6 +85,16 @@ MusicId control_velocity(Music& m, int velocity, MusicId child);
 MusicId control_meter(Music& m, int num, int den, MusicId child); // time signature
 MusicId control_articulate(Music& m, Rational gate, int accent, MusicId child);
 MusicId barline(Music& m);                                // a measure boundary marker
+
+// The accidental (semitones) a key signature gives a diatonic letter (0..6 = C..B):
+// +1/0/-1 from `fifths` sharps(+)/flats(-). Used by `inKey` to respell.
+int key_accidental(int fifths, int letter);
+
+// Resolve every *floating* Note pitch in the subtree to `fifths`'s key (fixed
+// pitches and structure untouched), returning a fresh subtree. `inKey` runs this,
+// then wraps the result in a key Control node for engraving metadata.
+MusicId apply_key(Music& m, int fifths, MusicId id);
+MusicId control_key(Music& m, int fifths, MusicId child);
 
 // Transpose every Note in the subtree by (diatonic steps, semitones); Rests and
 // structure are preserved. Returns a fresh subtree (input is left untouched).

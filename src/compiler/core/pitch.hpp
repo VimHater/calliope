@@ -20,6 +20,11 @@ struct Pitch {
     int letter = 0;     // 0..6
     int accidental = 0; // semitones
     int octave = 0;
+    // A bare notation letter (`f`, no is/es) carries a *floating* natural: it is
+    // still F natural everywhere, but an enclosing `inKey` may respell it to the
+    // key's accidental. An explicit accidental, or any computed pitch, is fixed
+    // (floating = false). Ignored by spelling equality / projections.
+    bool floating = false;
 };
 
 Pitch pitch(int letter, int accidental, int octave);

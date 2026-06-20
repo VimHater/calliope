@@ -257,4 +257,22 @@ void run_stdlib_tests() {
     CHECK_EQ_STR(eval::show_value(run("main = turn c'4")),
                  "(D4:1/16 :+: (C4:1/16 :+: (Bb3:1/16 :+: C4:1/16)))");
     CHECK_EQ_STR(type_of("main = 0", "trill"), "Pitch -> Music");
+
+    // ---- keys / scales / diatonic ---------------------------------------
+    CHECK(run("main = major c'").i == 0);   // C major: 0 sharps
+    CHECK(run("main = major d'").i == 2);   // D major: 2 sharps
+    CHECK(run("main = minor a'").i == 0);   // A minor: relative to C major
+    CHECK(run("main = minor e'").i == 1);   // E minor: 1 sharp
+    // inKey respells floating accidentals (D major: C#, F#) and tags the signature
+    CHECK_EQ_STR(eval::show_value(run("main = inKey (major d') (c d e f g)")),
+                 "key(2, ((((C#3:1/4 :+: D3:1/4) :+: E3:1/4) :+: F#3:1/4) :+: G3:1/4))");
+    CHECK_EQ_STR(type_of("main = 0", "inKey"), "Phrase t0 => Int -> t0 -> Music");
+    // scale degree 3 of D major is F#
+    CHECK_EQ_STR(eval::show_value(run("main = note (scaleDegree d' 3)")), "F#4:1/4");
+    // diatonic transpose up a third (2 scale steps) in D major
+    CHECK_EQ_STR(eval::show_value(run("main = diatonicUp (major d') 2 (c' d' e')")),
+                 "((E4:1/4 :+: F#4:1/4) :+: G4:1/4)");
+    // key-aware ornament: a trill in D major on F is F#–G
+    CHECK_EQ_STR(eval::show_value(run("main = trillIn (major d') f'4")),
+                 "(F#4:1/16 :+: (G4:1/16 :+: (F#4:1/16 :+: G4:1/16)))");
 }

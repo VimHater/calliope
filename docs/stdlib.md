@@ -162,6 +162,33 @@ acciaccatura b' c''4         -- a crushed grace B before C
 trill g'2                    -- a half-note trill G–A–G–A
 ```
 
+### Keys & scales
+
+A **key respells the floating (bare) accidentals** in a phrase: under D major a bare
+`f` becomes F#, while an explicit `fis`/`fes` is left alone, and with no key a bare
+letter stays natural. A key is just its signature in **fifths** (+ sharps, − flats);
+`major`/`minor` compute it from a tonic.
+
+| Function | Type | Description |
+|----------|------|-------------|
+| `major` / `minor` | `Pitch -> Int` | the key signature (fifths) of the major / minor key on a tonic |
+| `inKey` | `Phrase t => Int -> t -> Music` | play a phrase in a key — its floating accidentals snap to it, and the signature is tagged |
+| `scaleDegree` | `Pitch -> Int -> Pitch` | the *n*th degree (1 = tonic) of the major key on a tonic |
+| `diatonicUp` / `diatonicDown` | `Int -> Int -> Music -> Music` | transpose every pitch by *n* scale steps, respelled for the key |
+| `trillIn` / `mordentIn` / `turnIn` | `Int -> Pitch -> Music` | key-aware ornaments — the neighbour is the next scale note in the key, not a fixed M2 |
+| `keyPitch` | `Int -> Int -> Pitch` | a pitch at an absolute diatonic step, spelled for the key (the building block) |
+
+```
+inKey (major d') (c d e f g)    -- D major: C# D E F# G  (bare f -> F#)
+inKey (minor a') melody         -- A minor (= no sharps/flats)
+scaleDegree d' 5                -- A4 (the fifth degree of D major)
+diatonicUp (major c') 2 motif   -- up a third within C major
+trillIn (major d') f'4          -- a trill F#–G (the scale neighbour, not F#–G#)
+```
+
+Key is **orthogonal to octave mode** — `#relative`/`#absolute` choose how octave
+marks resolve; a key chooses how bare accidentals resolve. They don't interact.
+
 ```
 transpose P5 (c' e' g')   -- G4 B4 D5
 retrograde (c' e' g')     -- G4 E4 C4

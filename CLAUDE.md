@@ -180,8 +180,10 @@ in (loaded units never shift the program's lines).
   `firstPitch`, the meter sugar `commonTime`/`cutTime`/`waltz`, named **dynamics**
   `pianissimo`…`fortississimo` (spelled out — `f` is the pitch F — over `velocity`),
   **articulations** `staccato`/`legato`/`slur`/`tenuto`/`accent`/`marcato` (over the
-  `articulate` axis), **grace notes** `acciaccatura`/`appoggiatura` and **ornaments**
-  `trill`/`mordent`/`turn` (note→figure rewrites, M2 neighbour). The
+  `articulate` axis), **grace notes** `acciaccatura`/`appoggiatura`, **ornaments**
+  `trill`/`mordent`/`turn` (note→figure rewrites, M2 neighbour), and **keys** —
+  `major`/`minor` (tonic → fifths), `inKey`, `scaleDegree`, `diatonicUp`/`diatonicDown`,
+  and key-aware `trillIn`/`mordentIn`/`turnIn`. The
   headline example type-checks and runs:
   `development subj = subj `par` (invert subj ^+ P5)`.
 
@@ -200,11 +202,14 @@ honored (`c'8` = 1/8, default quarter). The builtin `Transposable Music` instanc
 maps `^+`/`^-` over every note, preserving spelling + durations, so `c d e ^+ P5`
 transposes the phrase. **`Control` is the `Modify` node** — it wraps a sub-phrase
 along one axis: **instrument**, **`tempo` (bpm)**, **`velocity` (0..127)**, **`meter`
-(time signature)**, or **`articulate` (gate + accent)** — `flatten` reads the gate to
+(time signature)**, **`articulate` (gate + accent)** — `flatten` reads the gate to
 hold each note for `gate · duration` (sounding ≠ slot, so staccato is short with a
-gap) and adds the accent to velocity. Named **dynamics** and **articulations** are
-stdlib over `velocity` / `articulate`; **grace notes / ornaments** are stdlib
-note→figure rewrites. **Key** is the one remaining axis. `Instrument` is a typed
+gap) and adds the accent to velocity — or **`key` (signature in fifths)**: `inKey`
+resolves the *floating* (bare-letter) accidentals in its subtree to the key (`f` →
+F# in D major) at construction (`music::apply_key`) and tags the Control for
+engraving. Named **dynamics** and **articulations** are stdlib over `velocity` /
+`articulate`; **grace notes / ornaments / scales / diatonic transforms** are stdlib.
+`Instrument` is a typed
 enum of builtin nullary constructors (`Cello`, `Flute`, … like the `Interval`
 constructors — `core/instrument.{hpp,cpp}` is the single name↔GM↔.sfz table); the
 stdlib `onInstrument :: Phrase t => Instrument -> t -> Music` (over the
@@ -317,8 +322,13 @@ Two IRs, designed independently (spec §13):
   handled before parsing; they affect how text is *read/assembled* only
   (`#relative`, `#absolute`, `#load "<file>"`; set will grow — O12). Musical
   context (key/tempo/dynamics/instrument) is *never* a directive — it's the §8
-  term-level combinators (`inKey`, `tempo`, …) producing `Control` nodes. Key is
-  metadata; letters stay literal (`fis` even in D major). See spec §5.1–5.3.
+  term-level combinators (`inKey`, `tempo`, …) producing `Control` nodes. **Key
+  respells (O8 revised):** a bare letter carries a *floating* natural (`Pitch.floating`),
+  and `inKey k` resolves the floating pitches in its subtree to the key's accidental
+  (`f` → F# in D major) while an explicit `fis`/`fes` is left untouched; spelling is
+  still kept (C# ≠ Db), and with no `inKey` a bare letter stays natural (backward
+  compatible). The *letter* is still fixed at lex time — only an unmarked accidental
+  defers to key resolution. See spec §5.1–5.3.
 - **Stdlib in Calliope, thin C++ core (O-boundary, §14).** The C++ core exposes
   only axioms: `Int`/`Rational` + ops; `Pitch` *projections* (`semitones`,
   `diatonicStep`, `makePitch`, `chromaticOf`); the Music IR constructors; the

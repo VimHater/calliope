@@ -176,6 +176,14 @@ void run_eval_tests() {
     // a bare pitch lifts in meter (Phrase), like tempo/velocity
     CHECK_EQ_STR(eval::show_value(run_main("meter 2 2 c'")), "meter(2/2, C4:1/4)");
 
+    // key signatures respell *floating* (bare) accidentals; explicit ones untouched
+    CHECK_EQ_STR(eval::show_value(run_main("withKey 2 (c f g)")),   // D major: C#, F#
+                 "key(2, ((C#3:1/4 :+: F#3:1/4) :+: G3:1/4))");
+    CHECK_EQ_STR(eval::show_value(run_main("withKey 2 (fis fes)")), // explicit overrides
+                 "key(2, (F#3:1/4 :+: Fb3:1/4))");
+    CHECK_EQ_STR(eval::show_value(run_main("c f g")),               // no key -> natural
+                 "((C3:1/4 :+: F3:1/4) :+: G3:1/4)");
+
     // ---- comparison: pitch ordering (by height) + deep Music/== --------
     CHECK_EQ_STR(eval::show_value(run_main("c' < d'")), "True");   // C4 below D4
     CHECK_EQ_STR(eval::show_value(run_main("e' > c'")), "True");

@@ -636,7 +636,11 @@ Decisions we should make explicitly:
   so the pass can interpret octaves under whichever region mode applies. Nothing
   relative survives — the IR is always absolute. **Key/tempo/dynamics** are *not*
   directives: they are the §8 term-level combinators (`inKey`, `tempo`, …)
-  producing `Control` nodes; key is metadata only and letters stay literal (§5.2).
+  producing `Control` nodes. **O8 revised — key respells:** a bare letter carries a
+  *floating* natural; `inKey k` resolves the floating pitches in its subtree to the
+  key's accidental (`f` → F# in D major), an explicit `fis`/`fes` overriding. Spelling
+  is still kept (C# ≠ Db); the *letter* is fixed at lex time, only the unmarked
+  accidental defers to key resolution; with no `inKey`, a bare letter stays natural.
   *(Two related questions also resolved earlier: O1 — no notation delimiter; and
   pitch/identifier disambiguation — the pitch lexical class is reserved, no
   sigil. See §2.)*

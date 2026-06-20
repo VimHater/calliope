@@ -69,6 +69,7 @@ arithmetic on these.
 | `diatonicStep` | `Pitch -> Int` | staff position (octave·7 + letter) |
 | `chromaticOf` | `Int -> Int` | semitones of a diatonic step (the natural at that position) |
 | `makePitch` | `Int -> Int -> Pitch` | build a pitch from a diatonic step and an accidental |
+| `keyAccidental` | `Int -> Int -> Int` | the accidental (−1/0/+1) a key signature (fifths) gives a diatonic letter (0..6 = C..B); the stdlib builds `scaleDegree` / diatonic transforms on it |
 
 ```
 -- transpose by raw semitones, respelled at a chosen staff position
@@ -154,6 +155,7 @@ notation — so use `myCello`, `nylon`, `cello2`, …)
 | `velocity` | `Phrase t => Int -> t -> Music` | set the note-on velocity (0..127) for a phrase |
 | `meter` | `Phrase t => Int -> Int -> t -> Music` | wrap a phrase in a time signature (`meter 3 4 …`) |
 | `articulate` | `Phrase t => Rational -> Int -> t -> Music` | a performance gate + accent: each note *sounds* for `gate · its duration` (the slot is unchanged) and its velocity shifts by the accent. The stdlib wraps it as `staccato`/`legato`/`accent`/… |
+| `withKey` | `Phrase t => Int -> t -> Music` | apply a key signature (in **fifths**, + sharps / − flats): resolve the floating accidentals in the phrase to the key and tag the signature. The stdlib `inKey` (with `major`/`minor`) is the friendly form |
 
 All three are `Control` nodes, like instruments — they wrap a sub-phrase and apply
 only within it (an inner one overrides an outer). Tempo is resolved into real time,

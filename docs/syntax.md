@@ -42,7 +42,10 @@ class Transposable t where (^+) :: t -> Interval -> t
 | dotted | `.` | `c'4.` = dotted quarter (3/8); `..` = double dotted |
 
 Spelling is preserved (C♯ ≠ D♭) — collapse to a pitch number only at the playback
-boundary with `semitones`. A pitch literal with no duration defaults to a quarter
+boundary with `semitones`. A **bare** letter (no `is`/`es`) carries a *floating*
+natural: it stays natural on its own, but an enclosing [`inKey`](./stdlib.md) respells
+it to the key (a bare `f` becomes F♯ in D major); an explicit `fis`/`fes` is never
+touched. A pitch literal with no duration defaults to a quarter
 note. Durations are exact rationals (whole-note fractions).
 
 ```
