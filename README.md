@@ -23,4 +23,7 @@ theme = motif :+: c''8 :+: r8
 
 main = theme |> meter 2 4 |> tempo 120
 ```
-[`demo.wav`](./demo.wav)
+
+<video src="https://github.com/VimHater/calliope/raw/main/demo.mp4" controls></video>
+
+<sub>▶ audio preview — also [`demo.wav`](./demo.wav)</sub>

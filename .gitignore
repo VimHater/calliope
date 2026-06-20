@@ -18,6 +18,7 @@ calliope_tests
 *.mp3
 *.cal
 !demo.wav
+!demo.mp4
 
 *.swp
 *~
