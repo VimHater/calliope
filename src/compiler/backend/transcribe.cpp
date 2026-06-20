@@ -59,6 +59,7 @@ struct Note {
     bool chord = false;     // pinned to the previous note's start
     bool tie_start = false; // tied into the next same-pitch note (`~`)
     bool pedaled = false;   // sounding under a depressed damper pedal
+    int oshift = 0;         // octave-shift in effect (signed octaves: 8vb = -1, 8va = +1)
     std::string artic;      // "staccato"/"accent"/"tenuto"/"marcato"
     std::string ornament;   // "trill"/"mordent"/"turn"
     std::string dynamic;    // a dynamic taking effect here ("forte"/…)
@@ -168,6 +169,7 @@ bool parse_xml(const std::string& xml, Score& score, std::string& err) {
     int mm_per_minute = 0;
     bool note_is_grace = false, pedal_down = false, have_grace = false;
     int grace_voice = 0;
+    int os_dir = 0, os_oct = 1, active_oshift = 0;  // octave-shift span state
     Note note, grace_note;
 
     auto tag_is = [&](const char* t) { return ctx.tag && std::strcmp(ctx.tag, t) == 0; };
@@ -214,6 +216,20 @@ bool parse_xml(const std::string& xml, Score& score, std::string& err) {
                 std::string t = v;
                 if (t == "start" || t == "change" || t == "sostenuto") pedal_down = true;
                 else if (t == "stop") pedal_down = false;
+            } else if (tag_is("octave-shift") && a && v) {
+                // <octave-shift type=up/down size=8/15/22>: written pitch is on the
+                // staff, the shift moves the SOUNDING octave (down = 8vb, sounds lower)
+                std::string n = a, t = v;
+                if (n == "type") {
+                    if (t == "stop") os_dir = 0;
+                    else if (t == "up") os_dir = 1;
+                    else if (t == "down") os_dir = -1;
+                    // "continue" keeps the current direction
+                } else if (n == "size") {
+                    int sz = std::atoi(v);
+                    os_oct = sz >= 8 ? (sz - 1) / 7 : 1;   // 8->1, 15->2, 22->3
+                }
+                active_oshift = os_dir * os_oct;
             }
         } else if (code == HOXML_ELEMENT_END) {
             std::string content = trim(ctx.content);
@@ -266,6 +282,7 @@ bool parse_xml(const std::string& xml, Score& score, std::string& err) {
                     int start = note.chord ? prev_start : cursor;
                     note.start_div = start;
                     note.pedaled = pedal_down;
+                    note.oshift = active_oshift;
                     if (have_grace && grace_voice == voice && !note.chord && !note.rest) {
                         note.has_grace = true;
                         note.g_letter = grace_note.letter;
@@ -424,6 +441,31 @@ int measure_divs(const Score& s) {
     return s.beats * (4 * s.divisions / s.beat_type);
 }
 
+// split a note list into octave-shift segments and wrap each shifted run in
+// `ottava k (...)` (8va = +1, 8vb = -1). A rest inherits the current segment's
+// shift so a gap-rest inside an 8va span doesn't fragment the run.
+std::string render_octave(const Score& s, const std::vector<Note>& notes) {
+    std::vector<std::pair<int, std::vector<Note>>> segs;
+    for (const Note& nt : notes) {
+        int sh = nt.rest ? (segs.empty() ? 0 : segs.back().first) : nt.oshift;
+        if (segs.empty() || sh != segs.back().first) segs.push_back({sh, {}});
+        segs.back().second.push_back(nt);
+    }
+    std::string out;
+    for (std::size_t k = 0; k < segs.size(); k++) {
+        std::string run = render_run(s, segs[k].second);
+        if (segs[k].first != 0) {
+            int sh = segs[k].first;   // no unary minus in the grammar -> use `negate`
+            std::string arg = sh < 0 ? "(negate " + std::to_string(-sh) + ")"
+                                     : std::to_string(sh);
+            run = "ottava " + arg + " (" + run + ")";
+        }
+        if (k) out += " :+: ";
+        out += run;
+    }
+    return out.empty() ? "r4" : out;
+}
+
 // split a note list into dynamic segments and wrap each (forte (...), piano (...))
 std::string render_dynamics(const Score& s, const std::vector<Note>& notes) {
     std::vector<std::pair<std::string, std::vector<Note>>> segs;
@@ -434,7 +476,7 @@ std::string render_dynamics(const Score& s, const std::vector<Note>& notes) {
     }
     std::string out;
     for (std::size_t k = 0; k < segs.size(); k++) {
-        std::string run = render_run(s, segs[k].second);
+        std::string run = render_octave(s, segs[k].second);
         if (!segs[k].first.empty()) run = segs[k].first + " (" + run + ")";
         if (k) out += " :+: ";
         out += run;
@@ -546,7 +588,7 @@ void report_unsupported(const std::set<std::string>& seen) {
         "pppp", "ppppp", "pppppp", "ffff", "fffff", "ffffff", "n",
         "sf", "sfz", "sffz", "fz", "sforzando", "sforzato",
         "rf", "rfz", "fp", "pf", "sfp", "sfpp", "sfzp",
-        "grace", "pedal",
+        "grace", "pedal", "octave-shift",
     };
     static const std::set<std::string> benign = {
         "score-partwise", "score-timewise", "part-list", "part-group", "score-part",

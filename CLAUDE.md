@@ -180,8 +180,9 @@ in (loaded units never shift the program's lines).
   `gcd` `lcm` `power` `min` `max` `clamp` `sum` `product` `maximum` `minimum`
   (`min`/`max`/`maximum`/`minimum` are `Ord`-polymorphic, so they order pitches too);
   music — `note`s/`line`/`chord`/`par`,
-  `transpose`, `mapPitches`, `invert` (spelled melodic inversion about the first
-  pitch), `retrograde`, `times`, `triplet`, `onInstrument`, `reflectPitch`,
+  `transpose`, `ottava` (octave shift — 8va/8vb), `mapPitches`, `invert` (spelled
+  melodic inversion about the first pitch), `retrograde`, `times`, `triplet`,
+  `onInstrument`, `reflectPitch`,
   `firstPitch`, the meter sugar `commonTime`/`cutTime`/`waltz`, named **dynamics**
   `pianissimo`…`fortississimo` (spelled out — `f` is the pitch F — over `velocity`),
   **articulations** `staccato`/`legato`/`slur`/`tenuto`/`accent`/`marcato` (over the

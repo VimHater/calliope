@@ -93,6 +93,7 @@ melody `par` bassline        -- two phrases at once
 | Function | Type | Description |
 |----------|------|-------------|
 | `transpose` | `Transposable t => Interval -> t -> t` | shift a pitch or phrase by an interval (`flip (^+)`) |
+| `ottava` | `Int -> Music -> Music` | shift a phrase by *n* octaves (8va = `ottava 1`, 15ma = `2`, 8vb = `ottava (negate 1)`) |
 | `mapPitches` | `(Pitch -> Pitch) -> Music -> Music` | rewrite every pitch, keeping structure and durations |
 | `firstPitch` | `Music -> Pitch` | the leftmost sounding pitch (inversion's axis) |
 | `reflectPitch` | `Pitch -> Pitch -> Pitch` | mirror a pitch about an axis pitch (spelling mirrors too) |

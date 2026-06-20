@@ -171,6 +171,13 @@ par left right = parallel left right
 transpose :: Interval -> Music -> Music
 transpose interval phrase = phrase ^+ interval
 
+-- shift a phrase by n octaves: n>0 up (8va = ottava 1, 15ma = 2), n<0 down (8vb)
+ottava :: Int -> Music -> Music
+ottava n phrase =
+  if n == 0 then phrase
+  else if n > 0 then ottava (n - 1) (phrase ^+ P8)
+  else ottava (n + 1) (phrase ^- P8)
+
 -- rewrite every pitch in a phrase, keeping structure + durations
 mapPitches :: (Pitch -> Pitch) -> Music -> Music
 mapPitches func phrase =
