@@ -153,6 +153,7 @@ notation — so use `myCello`, `nylon`, `cello2`, …)
 | `tempo` | `Phrase t => Int -> t -> Music` | play a phrase at the given tempo (beats per minute) |
 | `velocity` | `Phrase t => Int -> t -> Music` | set the note-on velocity (0..127) for a phrase |
 | `meter` | `Phrase t => Int -> Int -> t -> Music` | wrap a phrase in a time signature (`meter 3 4 …`) |
+| `articulate` | `Phrase t => Rational -> Int -> t -> Music` | a performance gate + accent: each note *sounds* for `gate · its duration` (the slot is unchanged) and its velocity shifts by the accent. The stdlib wraps it as `staccato`/`legato`/`accent`/… |
 
 All three are `Control` nodes, like instruments — they wrap a sub-phrase and apply
 only within it (an inner one overrides an outer). Tempo is resolved into real time,
@@ -184,6 +185,15 @@ meter 3 4 (c'4 d'4 e'4 | f'4 g'4 a'4)            -- waltz feel (downbeat accent)
 Note durations stay absolute (a quarter is `1/4` whatever the meter); meter affects
 accent and bar-checking, not how long a note is. The stdlib adds the named sugar
 `commonTime` (4/4), `cutTime` (2/2) and `waltz` (3/4).
+
+**Articulation** (`articulate gate accent`) is the other functional axis. The `gate`
+is a sounding-length factor — the note still *occupies* its full notated slot, but
+the synth holds it for only `gate · duration`, so a staccato note is short with a gap
+after (`gate = 1/2`), a legato one is full (`gate = 1/1`). The `accent` is added to
+the note's velocity. The IR keeps the mark abstract (a staccato quarter is still a
+quarter); `flatten` applies the gate and accent. The stdlib names cover the common
+marks — `staccato`, `legato`/`slur`, `tenuto`, `accent`, `marcato` (see
+[stdlib](./stdlib.md)).
 
 ### Predicates
 

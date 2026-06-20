@@ -158,4 +158,25 @@ void run_score_tests() {
         backend::flatten(m, bad, &errs2);
         CHECK(errs2.size() == 1);
     }
+
+    // Articulation: the gate shortens the sounding length but not the slot; the
+    // accent shifts velocity.
+    {
+        music::Music m;
+        music::MusicId run = music::seq(m, music::note(m, pitch(0, 0, 4), q),
+                                           music::note(m, pitch(1, 0, 4), q));
+        // staccato (gate 1/2): each note sounds half a beat, but the slot is full
+        music::MusicId stac = music::control_articulate(m, rational(1, 2), 0, run);
+        std::vector<backend::TimedNote> ns = backend::flatten(m, stac);
+        CHECK(ns.size() == 2);
+        CHECK(rat_eq(ns[0].dur, rational(1, 4)));   // sounds 1/4 s (gated short)
+        CHECK(rat_eq(ns[1].start, qs));             // ...next note still a full beat later
+        CHECK(ns[0].velocity == 80);                // gate leaves velocity alone
+
+        // accent (+15): full length, louder
+        music::MusicId acc = music::control_articulate(
+            m, rational(1, 1), 15, music::note(m, pitch(0, 0, 4), q));
+        std::vector<backend::TimedNote> na = backend::flatten(m, acc);
+        CHECK(na[0].velocity == 95 && rat_eq(na[0].dur, qs));
+    }
 }

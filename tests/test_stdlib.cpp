@@ -238,4 +238,23 @@ void run_stdlib_tests() {
     CHECK_EQ_STR(eval::show_value(run("main = pianissimo c'")), "vel(33, C4:1/4)");
     CHECK_EQ_STR(eval::show_value(run("main = mezzoForte c'")), "vel(80, C4:1/4)");
     CHECK_EQ_STR(type_of("main = 0", "forte"), "Phrase t0 => t0 -> Music");
+
+    // ---- articulations / grace / ornaments -------------------------------
+    // articulations: gate (sounding length) + accent (velocity) over `articulate`
+    CHECK_EQ_STR(eval::show_value(run("main = staccato (c d)")),
+                 "art(1/2,0, (C3:1/4 :+: D3:1/4))");
+    CHECK_EQ_STR(eval::show_value(run("main = accent c'")), "art(1/1,15, C4:1/4)");
+    CHECK_EQ_STR(eval::show_value(run("main = marcato c'")), "art(3/4,20, C4:1/4)");
+    CHECK_EQ_STR(type_of("main = 0", "staccato"), "Phrase t0 => t0 -> Music");
+    // grace notes steal time from the main note (a bare pitch carries its duration)
+    CHECK_EQ_STR(eval::show_value(run("main = acciaccatura d' c'4")),
+                 "(D4:1/16 :+: C4:3/16)");
+    CHECK_EQ_STR(eval::show_value(run("main = appoggiatura d' c'4")),
+                 "(D4:1/8 :+: C4:1/8)");
+    // ornaments expand a note into a fast figure filling its duration
+    CHECK_EQ_STR(eval::show_value(run("main = trill c'4")),
+                 "(C4:1/16 :+: (D4:1/16 :+: (C4:1/16 :+: D4:1/16)))");
+    CHECK_EQ_STR(eval::show_value(run("main = turn c'4")),
+                 "(D4:1/16 :+: (C4:1/16 :+: (Bb3:1/16 :+: C4:1/16)))");
+    CHECK_EQ_STR(type_of("main = 0", "trill"), "Pitch -> Music");
 }

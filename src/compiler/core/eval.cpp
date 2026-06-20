@@ -54,7 +54,7 @@ enum BuiltinId {
     B_MLEFT, B_MRIGHT,
     B_TUPLET,
     B_WITHINST, B_SFZ, B_GM,
-    B_TEMPO, B_VELOCITY, B_METER,
+    B_TEMPO, B_VELOCITY, B_METER, B_ARTICULATE,
 };
 
 struct BuiltinInfo { const char* name; int id; int arity; };
@@ -84,6 +84,7 @@ const BuiltinInfo kBuiltins[] = {
     {"tempo", B_TEMPO, 2},
     {"velocity", B_VELOCITY, 2},
     {"meter", B_METER, 3},
+    {"articulate", B_ARTICULATE, 3},
 };
 
 // Interval name -> (diatonic steps, semitones). Enough common ones to be useful.
@@ -381,6 +382,15 @@ Value call_builtin(Interp& I, int id, std::vector<Value>& a) {
             music::MusicId child = to_music(I, a[2]);
             return music_value(I, music::control_meter(*I.music, static_cast<int>(num),
                                                        static_cast<int>(den), child));
+        }
+        // ---- articulate: gate (sounding-length factor) + accent (velocity delta) ----
+        case B_ARTICULATE: {
+            Rational gate = a[0].kind == ValueKind::Rat ? a[0].rat
+                                                        : rational_from_int(a[0].i);
+            if (gate.num <= 0) { I.errors.push_back("articulate gate must be positive"); return a[2]; }
+            int acc = static_cast<int>(a[1].i);
+            music::MusicId child = to_music(I, a[2]);
+            return music_value(I, music::control_articulate(*I.music, gate, acc, child));
         }
     }
     I.errors.push_back("unknown builtin");

@@ -642,6 +642,19 @@ void seed_builtins(Checker& ck, Env& env) {
         s.constraints.emplace_back("Phrase", av);
         env.push_back({"meter", s});
     }
+    // articulate gate accent phrase — a performance gate (sounding-length factor,
+    // Rational) + a velocity delta (Int), over a lifting Phrase.
+    //   articulate :: Phrase t => Rational -> Int -> t -> Music
+    {
+        TypeId a = new_var(c); int av = c.pool[a].var;
+        Scheme s;
+        s.vars.push_back(av);
+        s.type = t_arrow(c, t_con0(c, "Rational"),
+                         t_arrow(c, t_con0(c, "Int"),
+                                 t_arrow(c, a, t_con0(c, "Music"))));
+        s.constraints.emplace_back("Phrase", av);
+        env.push_back({"articulate", s});
+    }
     // sfz "path" — lift a .sfz file path into a custom Instrument value.
     add_mono("sfz", t_arrow(c, t_con0(c, "Str"), t_con0(c, "Instrument")));
     // gm n — lift a General-MIDI program number into a custom Instrument value.

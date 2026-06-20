@@ -29,6 +29,9 @@
 //   • velocity   — note-on velocity 0..127 (`velocity` >= 0 means set)
 //   • meter      — time signature (`meter_num`/`meter_den` >= 0 means set); the
 //                  timing pass reads it for strong-beat accent + bar validation
+//   • articulation — a performance gate (`gate` sounding-length factor, num > 0 means
+//                  set: staccato = 1/2, legato = 1/1) + an `accent` velocity delta;
+//                  the timing pass shortens the sounding note and adjusts velocity
 // The payload stays abstract here; the flatten seam / backends resolve it. Note
 // durations are exact `Rational` whole-note fractions (quarter = 1/4), per spec O11.
 //
@@ -56,6 +59,8 @@ struct MusicNode {
     int velocity = -1;           // Control: note-on velocity 0..127 (-1 = unset)
     int meter_num = -1;          // Control: time-signature numerator (-1 = unset)
     int meter_den = -1;          // Control: time-signature denominator (-1 = unset)
+    Rational gate;               // Control: articulation sounding-length factor (num 0 = unset)
+    int accent = 0;              // Control: articulation velocity delta
 };
 
 struct Music {
@@ -73,6 +78,7 @@ MusicId control_gm(Music& m, int gm, MusicId child);      // raw GM program numb
 MusicId control_tempo(Music& m, int bpm, MusicId child);
 MusicId control_velocity(Music& m, int velocity, MusicId child);
 MusicId control_meter(Music& m, int num, int den, MusicId child); // time signature
+MusicId control_articulate(Music& m, Rational gate, int accent, MusicId child);
 MusicId barline(Music& m);                                // a measure boundary marker
 
 // Transpose every Note in the subtree by (diatonic steps, semitones); Rests and

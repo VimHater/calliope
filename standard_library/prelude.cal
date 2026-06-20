@@ -251,3 +251,71 @@ fortissimo phrase = velocity 112 phrase
 
 fortississimo :: Phrase t => t -> Music    -- fff
 fortississimo phrase = velocity 127 phrase
+
+-- ===========================================================================
+-- Articulations — a performance gate (sounding length) + an accent (velocity),
+-- over the `articulate` Control axis. A bare pitch lifts, so `staccato c'` works;
+-- wrapping a phrase articulates every note in it.
+-- ===========================================================================
+
+staccato :: Phrase t => t -> Music     -- short and detached (half the slot sounds)
+staccato phrase = articulate (1/2) 0 phrase
+
+legato :: Phrase t => t -> Music       -- smooth, full length (also written `slur`)
+legato phrase = articulate (1/1) 0 phrase
+
+slur :: Phrase t => t -> Music
+slur phrase = legato phrase
+
+tenuto :: Phrase t => t -> Music       -- full length, slight emphasis
+tenuto phrase = articulate (1/1) 5 phrase
+
+accent :: Phrase t => t -> Music       -- stressed (louder)
+accent phrase = articulate (1/1) 15 phrase
+
+marcato :: Phrase t => t -> Music      -- marked: strong and a touch short
+marcato phrase = articulate (3/4) 20 phrase
+
+-- ===========================================================================
+-- Grace notes — a quick ornamental note stealing time from the main note. Both
+-- the grace and the main are pitches (the main carries its own duration, read via
+-- `note main`).
+-- ===========================================================================
+
+acciaccatura :: Pitch -> Pitch -> Music    -- crushed: a sixteenth before the note
+acciaccatura grace tone =
+  sequence (noteWith grace (1/16)) (noteWith tone (noteDur (note tone) - (1/16)))
+
+appoggiatura :: Pitch -> Pitch -> Music    -- leaning: takes half the main value
+appoggiatura grace tone =
+  sequence (noteWith grace half) (noteWith tone half)
+  where half = noteDur (note tone) * (1/2)
+
+-- ===========================================================================
+-- Ornaments — expand a note into a rapid figure filling its duration. The note is
+-- a pitch (carrying its duration); the neighbour is a whole step (M2) away. (True
+-- key-aware ornaments wait on key support.)
+-- ===========================================================================
+
+-- (`unit`, not `d` — d is the pitch D and can't be a variable name)
+trill :: Pitch -> Music       -- rapid alternation with the upper neighbour
+trill tone =
+  noteWith tone unit :+: (noteWith hi unit :+: (noteWith tone unit :+: noteWith hi unit))
+  where
+    unit = noteDur (note tone) * (1/4)
+    hi   = tone ^+ M2
+
+mordent :: Pitch -> Music     -- note, upper neighbour, note (then hold the rest)
+mordent tone =
+  noteWith tone unit :+: (noteWith hi unit :+: noteWith tone (noteDur (note tone) - unit - unit))
+  where
+    unit = noteDur (note tone) * (1/4)
+    hi   = tone ^+ M2
+
+turn :: Pitch -> Music        -- upper, main, lower, main
+turn tone =
+  noteWith hi unit :+: (noteWith tone unit :+: (noteWith lo unit :+: noteWith tone unit))
+  where
+    unit = noteDur (note tone) * (1/4)
+    hi   = tone ^+ M2
+    lo   = tone ^- M2

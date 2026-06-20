@@ -88,6 +88,15 @@ MusicId control_meter(Music& m, int num, int den, MusicId child) {
     return add(m, n);
 }
 
+MusicId control_articulate(Music& m, Rational gate, int accent, MusicId child) {
+    MusicNode n;
+    n.kind = MusicKind::Control;
+    n.gate = gate;
+    n.accent = accent;
+    n.left = child;
+    return add(m, n);
+}
+
 MusicId barline(Music& m) {
     MusicNode n;
     n.kind = MusicKind::Barline;
@@ -107,6 +116,8 @@ MusicId rewrap_control(Music& m, const MusicNode& src, MusicId child) {
     n.velocity = src.velocity;
     n.meter_num = src.meter_num;
     n.meter_den = src.meter_den;
+    n.gate = src.gate;
+    n.accent = src.accent;
     n.left = child;
     return add(m, n);
 }
@@ -185,6 +196,7 @@ bool equal(const Music& m, MusicId a, MusicId b) {
             return na.instrument == nb.instrument && na.sfz_path == nb.sfz_path &&
                    na.gm == nb.gm && na.tempo == nb.tempo && na.velocity == nb.velocity &&
                    na.meter_num == nb.meter_num && na.meter_den == nb.meter_den &&
+                   rat_eq(na.gate, nb.gate) && na.accent == nb.accent &&
                    equal(m, na.left, nb.left);
         case MusicKind::Barline:
             return true; // kinds already match; barlines carry no data
@@ -240,7 +252,8 @@ MusicId tie(Music& m, MusicId a, MusicId b, bool& ok) {
         case MusicKind::Control:
             if (na.instrument != nb.instrument || na.sfz_path != nb.sfz_path ||
                 na.gm != nb.gm || na.tempo != nb.tempo || na.velocity != nb.velocity ||
-                na.meter_num != nb.meter_num || na.meter_den != nb.meter_den) {
+                na.meter_num != nb.meter_num || na.meter_den != nb.meter_den ||
+                !rat_eq(na.gate, nb.gate) || na.accent != nb.accent) {
                 ok = false;
                 return NoMusic;
             }
@@ -284,6 +297,9 @@ std::string show(const Music& m, MusicId id) {
             if (n.meter_num >= 0)
                 return "meter(" + std::to_string(n.meter_num) + "/" +
                        std::to_string(n.meter_den) + ", " + show(m, n.left) + ")";
+            if (n.gate.num > 0)
+                return "art(" + show_dur(n.gate) + "," + std::to_string(n.accent) +
+                       ", " + show(m, n.left) + ")";
             std::string name;
             if (!n.sfz_path.empty()) name = "\"" + n.sfz_path + "\"";
             else if (n.gm >= 0) name = "gm " + std::to_string(n.gm);

@@ -18,6 +18,8 @@ struct Ctx {
     int mnum = -1;            // active meter numerator (-1 = no meter)
     int mden = -1;            // active meter denominator
     Rational mstart;          // musical offset (whole-notes) where the meter began
+    Rational gate{1, 1};      // articulation: sounding-length factor (1/1 = full)
+    int accent = 0;           // articulation: velocity delta added to the base
 };
 
 // Length of a subtree along two clocks: real time (seconds, tempo baked) and
@@ -69,15 +71,19 @@ Len collect(const music::Music& m, music::MusicId id, Rational osec, Rational ob
             int key = semitones(n.pitch) + 12; // our C0 = 0; MIDI C0 = 12
             if (key < 0) key = 0;
             if (key > 127) key = 127;
-            Rational sdur = to_seconds(n.dur, cx.bpm);
-            int vel = cx.velocity;
-            if (cx.mnum > 0) {                  // an active meter accents strong beats
+            // the slot advances by the full notated duration; the note *sounds* for
+            // slot * gate (a staccato note is short, leaving a gap before the next).
+            Rational slot = to_seconds(n.dur, cx.bpm);
+            Rational sounding = to_seconds(rat_mul(n.dur, cx.gate), cx.bpm);
+            int base = cx.velocity + cx.accent;     // articulation accent
+            int vel = base;
+            if (cx.mnum > 0) {                       // an active meter accents strong beats
                 Rational barlen = rational(cx.mnum, cx.mden);
                 Rational pos = rat_mod(rat_sub(obeat, cx.mstart), barlen);
-                vel = accent_velocity(cx.velocity, pos, cx.mnum, cx.mden);
+                vel = accent_velocity(base, pos, cx.mnum, cx.mden);
             }
-            out.push_back({osec, key, sdur, cx.inst, cx.path, cx.gm, vel});
-            return {sdur, n.dur};
+            out.push_back({osec, key, sounding, cx.inst, cx.path, cx.gm, clamp127(vel)});
+            return {slot, n.dur};
         }
         case music::MusicKind::Rest:
             return {to_seconds(n.dur, cx.bpm), n.dur};
@@ -106,6 +112,7 @@ Len collect(const music::Music& m, music::MusicId id, Rational osec, Rational ob
             }
             if (n.tempo >= 0) inner.bpm = n.tempo;
             if (n.velocity >= 0) inner.velocity = n.velocity;
+            if (n.gate.num > 0) { inner.gate = n.gate; inner.accent = n.accent; }
             bool new_meter = n.meter_num > 0;
             if (new_meter) {
                 inner.mnum = n.meter_num;

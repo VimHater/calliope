@@ -177,9 +177,11 @@ in (loaded units never shift the program's lines).
   music — `note`s/`line`/`chord`/`par`,
   `transpose`, `mapPitches`, `invert` (spelled melodic inversion about the first
   pitch), `retrograde`, `times`, `triplet`, `onInstrument`, `reflectPitch`,
-  `firstPitch`, the meter sugar `commonTime`/`cutTime`/`waltz`, and named **dynamics**
-  `pianissimo`…`fortississimo` (spelled out — `f` is the pitch F — over `velocity`).
-  The
+  `firstPitch`, the meter sugar `commonTime`/`cutTime`/`waltz`, named **dynamics**
+  `pianissimo`…`fortississimo` (spelled out — `f` is the pitch F — over `velocity`),
+  **articulations** `staccato`/`legato`/`slur`/`tenuto`/`accent`/`marcato` (over the
+  `articulate` axis), **grace notes** `acciaccatura`/`appoggiatura` and **ornaments**
+  `trill`/`mordent`/`turn` (note→figure rewrites, M2 neighbour). The
   headline example type-checks and runs:
   `development subj = subj `par` (invert subj ^+ P5)`.
 
@@ -197,10 +199,12 @@ Notation desugars into it — a single pitch is a `Pitch`, but a run (`c d e`), 
 honored (`c'8` = 1/8, default quarter). The builtin `Transposable Music` instance
 maps `^+`/`^-` over every note, preserving spelling + durations, so `c d e ^+ P5`
 transposes the phrase. **`Control` is the `Modify` node** — it wraps a sub-phrase
-along one axis: **instrument**, **`tempo` (bpm)**, **`velocity` (0..127)**, or
-**`meter` (time signature)**. Named **dynamics** are *not* a new axis — the stdlib
-spells them as `velocity` wrappers (`forte = velocity 96`, …); **key** will follow.
-`Instrument` is a typed
+along one axis: **instrument**, **`tempo` (bpm)**, **`velocity` (0..127)**, **`meter`
+(time signature)**, or **`articulate` (gate + accent)** — `flatten` reads the gate to
+hold each note for `gate · duration` (sounding ≠ slot, so staccato is short with a
+gap) and adds the accent to velocity. Named **dynamics** and **articulations** are
+stdlib over `velocity` / `articulate`; **grace notes / ornaments** are stdlib
+note→figure rewrites. **Key** is the one remaining axis. `Instrument` is a typed
 enum of builtin nullary constructors (`Cello`, `Flute`, … like the `Interval`
 constructors — `core/instrument.{hpp,cpp}` is the single name↔GM↔.sfz table); the
 stdlib `onInstrument :: Phrase t => Instrument -> t -> Music` (over the

@@ -123,6 +123,45 @@ piano accompaniment          -- ...the accompaniment soft
 commonTime (forte subject)   -- dynamics nest with meter / instrument freely
 ```
 
+### Articulations
+
+Performance marks over the [`articulate`](./builtins.md) Control axis (a sounding-
+length **gate** + a velocity **accent**). All are `Phrase t => t -> Music`, so a bare
+pitch lifts (`staccato c'`) and wrapping a phrase articulates every note in it.
+
+| Function | Effect | gate · accent |
+|----------|--------|---------------|
+| `staccato` | short, detached | `1/2 · 0` |
+| `legato` / `slur` | smooth, full length | `1/1 · 0` |
+| `tenuto` | full length, slight stress | `1/1 · +5` |
+| `accent` | stressed (louder) | `1/1 · +15` |
+| `marcato` | marked: strong + a touch short | `3/4 · +20` |
+
+```
+staccato (c' d' e' f')       -- four crisp detached notes
+legato melody                -- ...or smooth and connected
+accent (firstNote) :+: rest  -- stress one note
+```
+
+### Grace notes & ornaments
+
+Grace notes steal time from the main note; ornaments expand a note into a fast figure
+filling its duration. The main note is a **pitch** (it carries its own duration), the
+neighbour a whole step (M2) away. (Key-aware ornaments wait on key support.)
+
+| Function | Type | Result of `… d' c'4` / `… c'4` |
+|----------|------|--------------------------------|
+| `acciaccatura` | `Pitch -> Pitch -> Music` | `D4:1/16 :+: C4:3/16` (crushed grace) |
+| `appoggiatura` | `Pitch -> Pitch -> Music` | `D4:1/8 :+: C4:1/8` (takes half) |
+| `trill` | `Pitch -> Music` | `C D C D`, each a sixteenth |
+| `mordent` | `Pitch -> Music` | `C D C` (last note holds the rest) |
+| `turn` | `Pitch -> Music` | `D C Bb C` (upper, main, lower, main) |
+
+```
+acciaccatura b' c''4         -- a crushed grace B before C
+trill g'2                    -- a half-note trill G–A–G–A
+```
+
 ```
 transpose P5 (c' e' g')   -- G4 B4 D5
 retrograde (c' e' g')     -- G4 E4 C4
