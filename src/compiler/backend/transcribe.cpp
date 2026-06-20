@@ -60,6 +60,9 @@ struct Note {
     bool tie_start = false; // tied into the next same-pitch note (`~`)
     bool pedaled = false;   // sounding under a depressed damper pedal
     int oshift = 0;         // octave-shift in effect (signed octaves: 8vb = -1, 8va = +1)
+    int wedge = 0;          // inside a hairpin: +1 crescendo, -1 diminuendo, 0 none
+    int vel = -1;           // baked velocity from a wedge ramp (-1 = none, use the dynamic)
+    bool rolled = false;    // an arpeggiated (rolled) chord
     std::string artic;      // "staccato"/"accent"/"tenuto"/"marcato"
     std::string ornament;   // "trill"/"mordent"/"turn"
     std::string dynamic;    // a dynamic taking effect here ("forte"/…)
@@ -140,6 +143,20 @@ std::string dyn_name(const std::string& tag) {
     return "";
 }
 
+// the velocity of a stdlib dynamic function name (mirrors prelude.cal); 80 = default mf
+int dyn_vel(const std::string& f) {
+    if (f == "pianississimo") return 16;
+    if (f == "pianissimo")    return 33;
+    if (f == "piano")         return 49;
+    if (f == "mezzoPiano")    return 64;
+    if (f == "mezzoForte")    return 80;
+    if (f == "forte")         return 96;
+    if (f == "fortissimo")    return 112;
+    if (f == "fortississimo") return 127;
+    return 80;
+}
+int clamp_vel(int v) { return v < 1 ? 1 : v > 127 ? 127 : v; }
+
 int denom_of_type(const std::string& type) {
     if (type == "whole")   return 1;
     if (type == "half")    return 2;
@@ -170,6 +187,7 @@ bool parse_xml(const std::string& xml, Score& score, std::string& err) {
     bool note_is_grace = false, pedal_down = false, have_grace = false;
     int grace_voice = 0;
     int os_dir = 0, os_oct = 1, active_oshift = 0;  // octave-shift span state
+    int active_wedge = 0;   // crescendo/diminuendo hairpin span state
     Note note, grace_note;
 
     auto tag_is = [&](const char* t) { return ctx.tag && std::strcmp(ctx.tag, t) == 0; };
@@ -230,6 +248,13 @@ bool parse_xml(const std::string& xml, Score& score, std::string& err) {
                     os_oct = sz >= 8 ? (sz - 1) / 7 : 1;   // 8->1, 15->2, 22->3
                 }
                 active_oshift = os_dir * os_oct;
+            } else if (tag_is("wedge") && a && std::strcmp(a, "type") == 0 && v) {
+                // hairpin: crescendo/diminuendo span -> a per-note velocity ramp
+                std::string t = v;
+                if (t == "crescendo") active_wedge = 1;
+                else if (t == "diminuendo") active_wedge = -1;
+                else if (t == "stop") active_wedge = 0;
+                // "continue" keeps it
             }
         } else if (code == HOXML_ELEMENT_END) {
             std::string content = trim(ctx.content);
@@ -243,6 +268,7 @@ bool parse_xml(const std::string& xml, Score& score, std::string& err) {
             else if (in_note && (tag_is("trill-mark") || tag_is("mordent") ||
                                  tag_is("inverted-mordent") || tag_is("turn") || tag_is("inverted-turn")))
                 note.ornament = has(ctx.tag, "mordent") ? "mordent" : has(ctx.tag, "turn") ? "turn" : "trill";
+            else if (in_note && tag_is("arpeggiate")) note.rolled = true;
             else if (in_pitch && tag_is("step") && !content.empty())
                 note.letter = static_cast<char>(std::tolower(static_cast<unsigned char>(content[0])));
             else if (in_pitch && tag_is("alter"))  note.alter = std::atoi(content.c_str());
@@ -283,6 +309,7 @@ bool parse_xml(const std::string& xml, Score& score, std::string& err) {
                     note.start_div = start;
                     note.pedaled = pedal_down;
                     note.oshift = active_oshift;
+                    note.wedge = active_wedge;
                     if (have_grace && grace_voice == voice && !note.chord && !note.rest) {
                         note.has_grace = true;
                         note.g_letter = grace_note.letter;
@@ -334,6 +361,30 @@ std::string literal(const Score& s, const std::vector<Note>& n, std::size_t i, s
     std::string out = "<";
     for (std::size_t k = i; k < j; k++) { if (k > i) out += ' '; out += pitch_lit(n[k]); }
     return out + ">" + dur;
+}
+
+// a rolled (arpeggiated) chord notes[i..j): stagger each note's onset by a small
+// step (bottom first), each held to the chord's end so the unit still spans dur D
+// and stays aligned — `(c4 :=: (r32 :+: e16.) :=: (r16 :+: g8))`-shaped.
+std::string arpeggio(const Score& s, const std::vector<Note>& n, std::size_t i, std::size_t j) {
+    int D = n[i].dur_div, count = static_cast<int>(j - i);
+    int unit = s.divisions / 8 > 0 ? s.divisions / 8 : 1;     // ~a 32nd note
+    int step = std::max(1, std::min(unit, D / (count * 2 > 0 ? count * 2 : 1)));
+    std::string out = "(";
+    for (std::size_t k = i; k < j; k++) {
+        int off = static_cast<int>(k - i) * step;
+        std::string voice;
+        if (off <= 0) {
+            voice = pitch_lit(n[k]) + format_duration(s, D);
+        } else {
+            int hold = D - off; if (hold < 1) hold = 1;
+            voice = "(r" + format_duration(s, off) + " :+: " +
+                    pitch_lit(n[k]) + format_duration(s, hold) + ")";
+        }
+        if (k > i) out += " :=: ";
+        out += voice;
+    }
+    return out + ")";
 }
 
 // reconstruct one measure: walk chord-units in time order, fill any gap before a
@@ -413,21 +464,30 @@ std::string render_run(const Score& s, const std::vector<Note>& n) {
             continue;
         }
 
-        std::string lit = literal(s, n, i, j);
+        // a rolled chord (arpeggiate) on any unit member -> a staggered figure
+        bool rolled = (j - i > 1) && !n[i].rest;
+        if (rolled) { rolled = false; for (std::size_t k = i; k < j; k++) if (n[k].rolled) rolled = true; }
+        std::string lit = rolled ? arpeggio(s, n, i, j) : literal(s, n, i, j);
         bool single = (j - i == 1) && !n[i].rest;
+        std::string tok = lit;
+        bool wrapped = rolled;   // a roll is its own expression, can't stay in a bare run
         if (single && n[i].has_grace) {
             // a grace note before the host -> acciaccatura grace host
             std::string g = pitch_of(n[i].g_letter, n[i].g_alter, n[i].g_octave);
-            flush(); tokens.push_back("acciaccatura " + g + " (" + lit + ")");
+            tok = "acciaccatura " + g + " (" + lit + ")"; wrapped = true;
         } else if (single && !n[i].ornament.empty()) {
-            std::string t = n[i].ornament + " (" + lit + ")";
-            if (!n[i].artic.empty()) t = n[i].artic + " (" + t + ")";
-            flush(); tokens.push_back(t);
+            tok = n[i].ornament + " (" + lit + ")";
+            if (!n[i].artic.empty()) tok = n[i].artic + " (" + tok + ")";
+            wrapped = true;
         } else if (!n[i].rest && !n[i].artic.empty()) {
-            flush(); tokens.push_back(n[i].artic + " (" + lit + ")");
-        } else {
-            plain.push_back(lit);
+            tok = n[i].artic + " (" + lit + ")"; wrapped = true;
         }
+        // a wedge-baked velocity wraps outermost (innermost Control wins at flatten)
+        if (!n[i].rest && n[i].vel >= 0) {
+            tok = "velocity " + std::to_string(n[i].vel) + " (" + tok + ")"; wrapped = true;
+        }
+        if (wrapped) { flush(); tokens.push_back(tok); }
+        else plain.push_back(lit);
         i = j;
     }
     flush();
@@ -484,6 +544,34 @@ std::string render_dynamics(const Score& s, const std::vector<Note>& notes) {
     return out.empty() ? "r4" : out;
 }
 
+// bake a wedge (crescendo/diminuendo) into per-note velocities: ramp linearly from
+// the dynamic before the hairpin to the one after it (or a level up/down if none),
+// across the notes in the span. Each ramped note then renders as `velocity N (...)`.
+void apply_wedges(std::vector<Note>& all) {
+    std::vector<int> level(all.size(), 80);   // active dynamic velocity per note
+    int cur = 80;
+    for (std::size_t k = 0; k < all.size(); k++) {
+        if (!all[k].dynamic.empty()) cur = dyn_vel(all[k].dynamic);
+        level[k] = cur;
+    }
+    std::size_t k = 0;
+    while (k < all.size()) {
+        if (all[k].wedge == 0) { k++; continue; }
+        std::size_t p = k; int w = all[k].wedge;
+        while (k < all.size() && all[k].wedge == w) k++;
+        std::size_t q = k;                          // span [p, q)
+        int start_v = p > 0 ? level[p - 1] : level[p];
+        int end_v;
+        if (q < all.size() && !all[q].dynamic.empty()) end_v = dyn_vel(all[q].dynamic);
+        else end_v = clamp_vel(start_v + (w > 0 ? 28 : -28));
+        int span = static_cast<int>(q - p);
+        for (std::size_t t = p; t < q; t++) {
+            double f = span > 1 ? static_cast<double>(t - p) / (span - 1) : 1.0;
+            all[t].vel = clamp_vel(static_cast<int>(start_v + (end_v - start_v) * f + 0.5));
+        }
+    }
+}
+
 // a whole voice: flatten its reconstructed measures (each padded to its bar target),
 // split into pedal segments (a `sustain (...)` wraps the pedalled runs), and render
 // the dynamics inside each.
@@ -496,6 +584,7 @@ std::string render_line(const Score& s, const Line& measures, const std::vector<
         const std::string& d = m < dyn_at.size() ? dyn_at[m] : std::string();
         for (Note nt : r) { if (!d.empty()) nt.dynamic = d; all.push_back(nt); }
     }
+    apply_wedges(all);
     // pedal segments: a rest continues the current segment (don't break a pedal)
     std::vector<std::pair<bool, std::vector<Note>>> segs;
     for (const Note& nt : all) {
@@ -588,7 +677,7 @@ void report_unsupported(const std::set<std::string>& seen) {
         "pppp", "ppppp", "pppppp", "ffff", "fffff", "ffffff", "n",
         "sf", "sfz", "sffz", "fz", "sforzando", "sforzato",
         "rf", "rfz", "fp", "pf", "sfp", "sfpp", "sfzp",
-        "grace", "pedal", "octave-shift",
+        "grace", "pedal", "octave-shift", "wedge", "arpeggiate",
     };
     static const std::set<std::string> benign = {
         "score-partwise", "score-timewise", "part-list", "part-group", "score-part",
