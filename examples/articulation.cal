@@ -1,0 +1,25 @@
+-- articulation.cal — performance marks: articulations, grace notes, ornaments.
+--
+-- Articulations wrap a phrase (or a bare note) and shape how it is *played*:
+--   * staccato shortens the sounding length (a gap after each note) — the slot is
+--     unchanged, so the rhythm stays put;
+--   * legato / slur play full and connected;
+--   * accent / marcato add stress (velocity), marcato also a touch short.
+-- Grace notes steal a little time from the main note; ornaments expand one note
+-- into a fast figure. (Run with `calliopei examples/articulation.cal` to hear the
+-- short vs smooth contrast and the ornament flourishes.)
+
+#load "prelude"
+
+motif = c' d' e' f'
+
+crisp  = staccato motif        -- detached
+smooth = legato (transpose P5 motif)  -- connected, a fifth up
+punchy = accent (g' g' g' g')  -- four stressed repeated notes
+
+-- a grace note before a held note, then a trill to finish the phrase
+flourish = acciaccatura b' c''2 :+: trill d''2
+
+-- line them up: crisp, smooth, punchy, then the flourish — all in 4/4
+main :: Music
+main = commonTime (line [crisp, smooth, punchy, flourish])
