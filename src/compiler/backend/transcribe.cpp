@@ -107,8 +107,12 @@ bool unzip_score(const std::vector<char>& bytes, std::string& xml, std::string& 
     return true;
 }
 
-// a MusicXML dynamics child tag (<f/>, <pp/>, …) -> the stdlib dynamic function
+// a MusicXML dynamics child tag (<f/>, <pp/>, <sf/>, …) -> the stdlib dynamic
+// function. The plain ladder maps directly; extremes past our 8 levels clamp to
+// the ends; accent marks (sf/fz/fp/rf families — a sudden stress, not a level)
+// approximate to the nearest loud level, the soft-after-accent ones to piano.
 std::string dyn_name(const std::string& tag) {
+    // plain ladder
     if (tag == "ppp") return "pianississimo";
     if (tag == "pp")  return "pianissimo";
     if (tag == "p")   return "piano";
@@ -117,6 +121,21 @@ std::string dyn_name(const std::string& tag) {
     if (tag == "f")   return "forte";
     if (tag == "ff")  return "fortissimo";
     if (tag == "fff") return "fortississimo";
+    // beyond the 8 levels we have -> clamp to the ends
+    if (tag == "pppp" || tag == "ppppp" || tag == "pppppp" || tag == "n")
+        return "pianississimo";  // n = niente (silent) -> our softest
+    if (tag == "ffff" || tag == "fffff" || tag == "ffffff")
+        return "fortississimo";
+    // accents: sudden stress -> approximate by a loud level
+    if (tag == "sf" || tag == "sfz" || tag == "sffz" || tag == "fz" ||
+        tag == "sforzando" || tag == "sforzato")
+        return "fortissimo";
+    if (tag == "rf" || tag == "rfz" || tag == "fp")  // rinforzando / forte-piano attack
+        return "forte";
+    if (tag == "pf")                                  // poco forte
+        return "mezzoForte";
+    if (tag == "sfp" || tag == "sfpp" || tag == "sfzp")  // accent then soft -> the soft tail
+        return "piano";
     return "";
 }
 
@@ -524,6 +543,9 @@ void report_unsupported(const std::set<std::string>& seen) {
         "ornaments", "trill-mark", "mordent", "inverted-mordent", "turn", "inverted-turn",
         "direction", "direction-type", "dynamics", "metronome", "beat-unit", "per-minute",
         "f", "p", "mf", "mp", "ff", "pp", "fff", "ppp",
+        "pppp", "ppppp", "pppppp", "ffff", "fffff", "ffffff", "n",
+        "sf", "sfz", "sffz", "fz", "sforzando", "sforzato",
+        "rf", "rfz", "fp", "pf", "sfp", "sfpp", "sfzp",
         "grace", "pedal",
     };
     static const std::set<std::string> benign = {
