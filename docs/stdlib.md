@@ -99,6 +99,30 @@ melody `par` bassline        -- the two at once
 | `cutTime` | `Phrase t => t -> Music` | wrap a phrase in 2/2 (`meter 2 2`) |
 | `waltz` | `Phrase t => t -> Music` | wrap a phrase in 3/4 (`meter 3 4`) |
 
+### Dynamics
+
+Named loudness levels — sugar over the [`velocity`](./builtins.md) Control axis. All
+have type `Phrase t => t -> Music`, so a bare pitch lifts (`forte c'`). Spelled out
+because the single-letter forte `f` collides with the pitch F. The default (no
+dynamic) is velocity 80 (≈ *mezzo-forte*).
+
+| Function | Mark | Velocity |
+|----------|------|----------|
+| `pianississimo` | ppp | 16 |
+| `pianissimo` | pp | 33 |
+| `piano` | p | 49 |
+| `mezzoPiano` | mp | 64 |
+| `mezzoForte` | mf | 80 |
+| `forte` | f | 96 |
+| `fortissimo` | ff | 112 |
+| `fortississimo` | fff | 127 |
+
+```
+forte melody                 -- play the melody loud
+piano accompaniment          -- ...the accompaniment soft
+commonTime (forte subject)   -- dynamics nest with meter / instrument freely
+```
+
 ```
 transpose P5 (c' e' g')   -- G4 B4 D5
 retrograde (c' e' g')     -- G4 E4 C4

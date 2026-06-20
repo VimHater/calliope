@@ -129,5 +129,6 @@ Runnable programs live in [`../examples/`](../examples): `hello.cal`,
 `development.cal`, the boolean/comparison tours `not-operator.cal` and
 `comparing-music.cal`, `recursion.cal` (numeric, mutual, list, and music-building
 recursion), `constraints.cal` (type-class constraints — the `=>` in a signature,
-used and inferred), and `meter.cal` (time signatures + `|` barlines — strong-beat
-accent and bar-length checking).
+used and inferred), `meter.cal` (time signatures + `|` barlines — strong-beat
+accent and bar-length checking), and `dynamics.cal` (named loudness levels `pp`…`ff`
+over `velocity`, nested with meter and instruments).

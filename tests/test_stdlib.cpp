@@ -226,4 +226,16 @@ void run_stdlib_tests() {
         CHECK_EQ_STR(eval::show_value(run("main = velocity 40 c'")), "vel(40, C4:1/4)");
         CHECK(!type_errors("main = onInstrument Cello c'"));
     }
+
+    // ---- meter / dynamics sugar -----------------------------------------
+    // commonTime / waltz wrap a phrase in a time-signature Control
+    CHECK_EQ_STR(eval::show_value(run("main = waltz (c' d' e')")),
+                 "meter(3/4, ((C4:1/4 :+: D4:1/4) :+: E4:1/4))");
+    CHECK_EQ_STR(type_of("main = 0", "commonTime"), "Phrase t0 => t0 -> Music");
+    // named dynamics: sugar over `velocity` (spelled out; a bare pitch lifts)
+    CHECK_EQ_STR(eval::show_value(run("main = forte (c d)")),
+                 "vel(96, (C3:1/4 :+: D3:1/4))");
+    CHECK_EQ_STR(eval::show_value(run("main = pianissimo c'")), "vel(33, C4:1/4)");
+    CHECK_EQ_STR(eval::show_value(run("main = mezzoForte c'")), "vel(80, C4:1/4)");
+    CHECK_EQ_STR(type_of("main = 0", "forte"), "Phrase t0 => t0 -> Music");
 }

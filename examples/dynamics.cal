@@ -1,0 +1,23 @@
+-- dynamics.cal — named loudness levels (pp, mf, ff, …).
+--
+-- Dynamics are stdlib sugar over the `velocity` Control axis. They are spelled
+-- out (the single-letter forte `f` would clash with the pitch F). Each is a
+-- function `Phrase t => t -> Music`, so a bare pitch lifts: `forte c'` works.
+--
+-- They nest freely with meter and instruments. Here a loud melody plays over a
+-- soft accompaniment, both in 3/4, on two instruments.
+--
+--   calliope --debug examples/dynamics.cal   -- print the Music IR
+--   calliopei examples/dynamics.cal          -- hear the loud/soft contrast
+
+#load "prelude"
+
+melody = c'' b' a' g' a' b'         -- two 3/4 bars of quarter notes
+accomp = <c' e' g'>2. <g, b, d'>2.  -- one dotted-half chord per bar (= 3/4 each)
+
+-- forte melody, piano chords; each on its own instrument, both a 3/4 waltz
+loud = waltz (onInstrument Flute (forte melody))
+soft = waltz (onInstrument Harp  (piano accomp))
+
+main :: Music
+main = par loud soft

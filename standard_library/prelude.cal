@@ -223,3 +223,31 @@ cutTime phrase = meter 2 2 phrase
 
 waltz :: Phrase t => t -> Music
 waltz phrase = meter 3 4 phrase
+
+-- named dynamics: loudness levels, sugar over the `velocity` Control axis. Spelled
+-- out because the single-letter forte `f` collides with the pitch F; the numbers
+-- follow the usual notation -> MIDI-velocity convention. A bare pitch lifts, so
+-- `forte c'` works. (default, no dynamic, is velocity 80 ~ mezzo-forte.)
+pianississimo :: Phrase t => t -> Music    -- ppp
+pianississimo phrase = velocity 16 phrase
+
+pianissimo :: Phrase t => t -> Music       -- pp
+pianissimo phrase = velocity 33 phrase
+
+piano :: Phrase t => t -> Music            -- p
+piano phrase = velocity 49 phrase
+
+mezzoPiano :: Phrase t => t -> Music       -- mp
+mezzoPiano phrase = velocity 64 phrase
+
+mezzoForte :: Phrase t => t -> Music       -- mf
+mezzoForte phrase = velocity 80 phrase
+
+forte :: Phrase t => t -> Music            -- f
+forte phrase = velocity 96 phrase
+
+fortissimo :: Phrase t => t -> Music       -- ff
+fortissimo phrase = velocity 112 phrase
+
+fortississimo :: Phrase t => t -> Music    -- fff
+fortississimo phrase = velocity 127 phrase

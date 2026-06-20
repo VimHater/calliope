@@ -177,7 +177,9 @@ in (loaded units never shift the program's lines).
   music — `note`s/`line`/`chord`/`par`,
   `transpose`, `mapPitches`, `invert` (spelled melodic inversion about the first
   pitch), `retrograde`, `times`, `triplet`, `onInstrument`, `reflectPitch`,
-  `firstPitch`. The
+  `firstPitch`, the meter sugar `commonTime`/`cutTime`/`waltz`, and named **dynamics**
+  `pianissimo`…`fortississimo` (spelled out — `f` is the pitch F — over `velocity`).
+  The
   headline example type-checks and runs:
   `development subj = subj `par` (invert subj ^+ P5)`.
 
@@ -195,8 +197,10 @@ Notation desugars into it — a single pitch is a `Pitch`, but a run (`c d e`), 
 honored (`c'8` = 1/8, default quarter). The builtin `Transposable Music` instance
 maps `^+`/`^-` over every note, preserving spelling + durations, so `c d e ^+ P5`
 transposes the phrase. **`Control` is the `Modify` node** — it wraps a sub-phrase
-along one axis: **instrument**, **`tempo` (bpm)**, or **`velocity` (0..127)** (key /
-dynamics-by-name will follow). `Instrument` is a typed
+along one axis: **instrument**, **`tempo` (bpm)**, **`velocity` (0..127)**, or
+**`meter` (time signature)**. Named **dynamics** are *not* a new axis — the stdlib
+spells them as `velocity` wrappers (`forte = velocity 96`, …); **key** will follow.
+`Instrument` is a typed
 enum of builtin nullary constructors (`Cello`, `Flute`, … like the `Interval`
 constructors — `core/instrument.{hpp,cpp}` is the single name↔GM↔.sfz table); the
 stdlib `onInstrument :: Phrase t => Instrument -> t -> Music` (over the
@@ -263,8 +267,8 @@ compile time for every entry point. Prelude sugar: `commonTime` (4/4) `cutTime` 
 `waltz` (3/4). Note durations stay absolute exact rationals (O11 untouched). Not yet
 built: octave-resolution pass (absolute works inline; `#relative` needs it), a richer
 score IR + MusicXML backend, a MIDI time-signature meta event, more prelude (intervals
-as a monoid, scales/keys, chords/harmony — and the remaining `Modify` axes:
-key/dynamics-by-name). Bootstrap: step 1 ✓ → step 2 ✓ → step 3 (in progress).
+as a monoid, scales/keys, chords/harmony — and the remaining `Modify` axis: key).
+Bootstrap: step 1 ✓ → step 2 ✓ → step 3 (in progress).
 
 ## Architecture (intended)
 
