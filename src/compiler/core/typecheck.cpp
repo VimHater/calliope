@@ -629,6 +629,19 @@ void seed_builtins(Checker& ck, Env& env) {
     add_phrase_control("withInstrument", "Instrument");
     add_phrase_control("tempo", "Int");
     add_phrase_control("velocity", "Int");
+    // meter num den phrase — wrap a phrase in a time signature (two Int heads, then
+    // a lifting Phrase like tempo/velocity).
+    //   meter :: Phrase t => Int -> Int -> t -> Music
+    {
+        TypeId a = new_var(c); int av = c.pool[a].var;
+        Scheme s;
+        s.vars.push_back(av);
+        s.type = t_arrow(c, t_con0(c, "Int"),
+                         t_arrow(c, t_con0(c, "Int"),
+                                 t_arrow(c, a, t_con0(c, "Music"))));
+        s.constraints.emplace_back("Phrase", av);
+        env.push_back({"meter", s});
+    }
     // sfz "path" — lift a .sfz file path into a custom Instrument value.
     add_mono("sfz", t_arrow(c, t_con0(c, "Str"), t_con0(c, "Instrument")));
     // gm n — lift a General-MIDI program number into a custom Instrument value.
@@ -647,6 +660,20 @@ void seed_builtins(Checker& ck, Env& env) {
         s.constraints.emplace_back("Phrase", av);
         s.constraints.emplace_back("Phrase", bv);
         env.push_back({"~", s});
+    }
+    // `|` barline: sequences two measures with a boundary marker between them.
+    // Typed exactly like `:+:` — each operand an independent Phrase, result Music.
+    //   (|) :: Phrase t => Phrase u => t -> u -> Music
+    {
+        TypeId a = new_var(c); int av = c.pool[a].var;
+        TypeId b = new_var(c); int bv = c.pool[b].var;
+        Scheme s;
+        s.vars.push_back(av);
+        s.vars.push_back(bv);
+        s.type = t_arrow(c, a, t_arrow(c, b, t_con0(c, "Music")));
+        s.constraints.emplace_back("Phrase", av);
+        s.constraints.emplace_back("Phrase", bv);
+        env.push_back({"|", s});
     }
     add_mono("semitones", t_arrow(c, t_con0(c, "Pitch"), t_con0(c, "Int")));
 

@@ -491,6 +491,13 @@ NodeId parse_expr(Parser& p, int min_prec) {
             if (prec < min_prec) break;
             op_tok = t;
             advance(p);
+        } else if (t.kind == TokenKind::Bar) {
+            // '|' is the barline operator: it separates whole measures, so it binds
+            // looser than every musical combinator (`:+:` etc.) — almost loosest.
+            prec = 2; right = false;
+            if (prec < min_prec) break;
+            op_tok = t;
+            advance(p);
         } else if (t.kind == TokenKind::Ident && (t.text == "and" || t.text == "or")) {
             // boolean keyword operators (short-circuit handled in the evaluator)
             prec = (t.text == "or") ? 2 : 3;

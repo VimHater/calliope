@@ -112,4 +112,50 @@ void run_score_tests() {
         std::vector<backend::TimedNote> nd = backend::flatten(m, music::note(m, pitch(0, 0, 4), q));
         CHECK(nd[0].velocity == 80);
     }
+
+    // A meter accents strong beats (audible): four quarters under 4/4 -> the
+    // downbeat is loudest (80+18), the mid-bar beat next (80+10), the rest weak.
+    {
+        music::Music m;
+        auto qn = [&](int letter) { return music::note(m, pitch(letter, 0, 4), q); };
+        music::MusicId run =
+            music::seq(m, music::seq(m, music::seq(m, qn(0), qn(1)), qn(2)), qn(3));
+        music::MusicId mtr = music::control_meter(m, 4, 4, run);
+        std::vector<backend::TimedNote> ns = backend::flatten(m, mtr);
+        CHECK(ns.size() == 4);
+        CHECK(ns[0].velocity == 98); // beat 1 (downbeat)
+        CHECK(ns[1].velocity == 80); // beat 2 (weak)
+        CHECK(ns[2].velocity == 90); // beat 3 (mid-bar accent)
+        CHECK(ns[3].velocity == 80); // beat 4 (weak)
+        // 3/4 over the same notes accents only the downbeat (no mid-bar at bi=1.5)
+        music::MusicId m34 = music::control_meter(m, 3, 4, run);
+        std::vector<backend::TimedNote> n3 = backend::flatten(m, m34);
+        CHECK(n3[0].velocity == 98 && n3[1].velocity == 80 && n3[2].velocity == 80);
+    }
+
+    // Barline validation (only when an errors sink is supplied): a `|` measure must
+    // fill exactly one bar of the active meter.
+    {
+        music::Music m;
+        auto qn = [&](int l) { return music::note(m, pitch(l, 0, 4), q); };
+        auto four = [&]() {
+            return music::seq(m, music::seq(m, music::seq(m, qn(0), qn(1)), qn(2)), qn(3));
+        };
+        // two full 4/4 measures separated by a barline -> no error
+        music::MusicId good = music::control_meter(
+            m, 4, 4, music::seq(m, four(), music::seq(m, music::barline(m), four())));
+        std::vector<std::string> errs;
+        backend::flatten(m, good, &errs);
+        CHECK(errs.empty());
+        // accent still applies with no errors sink (audible path)
+        CHECK(!backend::flatten(m, good).empty());
+
+        // first measure overfull (5 quarters) -> exactly one bar error
+        music::MusicId five = music::seq(m, four(), qn(0));
+        music::MusicId bad = music::control_meter(
+            m, 4, 4, music::seq(m, five, music::seq(m, music::barline(m), four())));
+        std::vector<std::string> errs2;
+        backend::flatten(m, bad, &errs2);
+        CHECK(errs2.size() == 1);
+    }
 }

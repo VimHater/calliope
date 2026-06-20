@@ -22,6 +22,7 @@ including all music theory — is written in Calliope in the
 | `:=:` | `Phrase t => Phrase u => t -> u -> Music` | parallel composition |
 | `:*:` | `Phrase t => t -> Int -> Music` | repeat a phrase n times in a row (`motif :*: 4`); binds tighter than `:+:`; `n >= 1` |
 | `~` | `Phrase t => Phrase u => t -> u -> Music` | tie two **matching** phrases (notes, chords, …) into one with summed durations (`c'4 ~ c'8` = `C4:3/8`; `<c e g> ~ <c e g>` = a held chord); ties chain (`c'4 ~ c'8 ~ c'8`). Operands must have the same pitches and shape, else a runtime error |
+| `\|` | `Phrase t => Phrase u => t -> u -> Music` | **barline**: sequence two measures with a boundary marker between them. Lowest precedence (looser than `:+:`). Under an enclosing `meter` each measure is checked (see below); without a meter it is an inert boundary |
 
 `not :: Bool -> Bool` is a prefix function. `:+:`/`:=:` are methods of the builtin
 `Phrase` class (instances `Pitch` and `Music`): a bare `Pitch` operand lifts to a
@@ -145,16 +146,17 @@ notation — so use `myCello`, `nylon`, `cello2`, …)
   directly (its own channel); audio plays it through the fallback GM soundfont. Use
   `gm` when you want a named voice outside the enum that still exports cleanly to MIDI.
 
-### Tempo & velocity
+### Tempo, velocity & meter
 
 | Function | Type | Meaning |
 |----------|------|---------|
 | `tempo` | `Phrase t => Int -> t -> Music` | play a phrase at the given tempo (beats per minute) |
 | `velocity` | `Phrase t => Int -> t -> Music` | set the note-on velocity (0..127) for a phrase |
+| `meter` | `Phrase t => Int -> Int -> t -> Music` | wrap a phrase in a time signature (`meter 3 4 …`) |
 
-Both are `Control` nodes, like instruments — they wrap a sub-phrase and apply only
-within it (an inner `tempo`/`velocity` overrides an outer one). Tempo is resolved
-into real time, so different tempi can even run at once under `par`:
+All three are `Control` nodes, like instruments — they wrap a sub-phrase and apply
+only within it (an inner one overrides an outer). Tempo is resolved into real time,
+so different tempi can even run at once under `par`:
 
 ```
 tempo 90 subject                          -- the subject at 90 bpm
@@ -162,7 +164,26 @@ velocity 40 accompaniment                 -- softer accompaniment
 par (tempo 120 melody) (tempo 80 drone)   -- two simultaneous tempi
 ```
 
-The default (no wrapper) is 120 bpm, velocity 80.
+The default (no wrapper) is 120 bpm, velocity 80, no meter.
+
+**Meter is functional, not a label.** Under a `meter n d` the timing pass does two
+real things:
+
+- **Strong-beat accent (audible).** Onsets on the downbeat (and the mid-bar beat of
+  simple meters, every third beat of compound ones) are played louder, so the same
+  notes sound different under a different meter.
+- **Bar validation.** The `|` barline checks the measure before it: it must fill
+  exactly one bar of the active meter, else compiling reports it (`bar 3: 5/4 in a
+  4/4 meter`). Without an enclosing `meter`, `|` is just an inert boundary.
+
+```
+meter 4 4 (c'4 d'4 e'4 f'4 | g'4 a'4 b'4 c''4)   -- two checked 4/4 bars, accented
+meter 3 4 (c'4 d'4 e'4 | f'4 g'4 a'4)            -- waltz feel (downbeat accent)
+```
+
+Note durations stay absolute (a quarter is `1/4` whatever the meter); meter affects
+accent and bar-checking, not how long a note is. The stdlib adds the named sugar
+`commonTime` (4/4), `cutTime` (2/2) and `waltz` (3/4).
 
 ### Predicates
 

@@ -2,8 +2,8 @@
 
 double x = x * 2
 
--- n is even when integer-dividing by 2 and multiplying back gives n again
-isEven n = n / 2 * 2 == n
+-- n is even when it leaves no remainder mod 2 (`/` is fractional, so use `mod`)
+isEven n = mod n 2 == 0
 
 -- add up a list of numbers
 total xs = foldr (\x running -> x + running) 0 xs

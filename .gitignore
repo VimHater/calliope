@@ -2,6 +2,7 @@ compile_commands.json
 
 calliope
 calliope_tests
+musicxml/
 *.o
 *.obj
 *.a

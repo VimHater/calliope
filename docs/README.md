@@ -128,5 +128,6 @@ Runnable programs live in [`../examples/`](../examples): `hello.cal`,
 `reverse-notes.cal`, `transforms.cal`, `arpeggio-and-chord.cal`, the headline
 `development.cal`, the boolean/comparison tours `not-operator.cal` and
 `comparing-music.cal`, `recursion.cal` (numeric, mutual, list, and music-building
-recursion), and `constraints.cal` (type-class constraints — the `=>` in a
-signature, used and inferred).
+recursion), `constraints.cal` (type-class constraints — the `=>` in a signature,
+used and inferred), and `meter.cal` (time signatures + `|` barlines — strong-beat
+accent and bar-length checking).

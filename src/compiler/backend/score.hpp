@@ -33,6 +33,13 @@ struct TimedNote {
 // Flatten the subtree rooted at `root` into absolute-timed notes (time-ordered by
 // construction: Seq lays its right child after the left, Par overlays both, Rest
 // advances time without emitting). Rests contribute no TimedNote.
-std::vector<TimedNote> flatten(const music::Music& m, music::MusicId root);
+//
+// An active `meter` Control accents strong-beat onsets (so meter is audible), and
+// — when `errors` is non-null — each `|` barline is checked against that meter, a
+// message per measure that does not fill exactly one bar ("bar 3: 5/4 in a 4/4
+// meter"). Backends pass nullptr (accent only); the driver passes a vector to
+// surface bar errors at compile time.
+std::vector<TimedNote> flatten(const music::Music& m, music::MusicId root,
+                               std::vector<std::string>* errors = nullptr);
 
 } // namespace calliope::backend

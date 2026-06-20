@@ -95,6 +95,9 @@ melody `par` bassline        -- the two at once
 | `retrograde` | `Music -> Music` | play a phrase backwards in time |
 | `times` | `Int -> Music -> Music` | repeat a phrase n times (n ≥ 1) |
 | `onInstrument` | `Phrase t => Instrument -> t -> Music` | play a phrase on a given instrument (a `Control` node); a bare pitch lifts, so `onInstrument Cello c` works |
+| `commonTime` | `Phrase t => t -> Music` | wrap a phrase in 4/4 (`meter 4 4`) — strong-beat accent + `\|` bar checking |
+| `cutTime` | `Phrase t => t -> Music` | wrap a phrase in 2/2 (`meter 2 2`) |
+| `waltz` | `Phrase t => t -> Music` | wrap a phrase in 3/4 (`meter 3 4`) |
 
 ```
 transpose P5 (c' e' g')   -- G4 B4 D5

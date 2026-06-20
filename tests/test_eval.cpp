@@ -167,6 +167,15 @@ void run_eval_tests() {
     CHECK_EQ_STR(eval::show_value(run_main("<c' e' g'> ~ <c' e' g'>")),
                  "((C4:1/2 :=: E4:1/2) :=: G4:1/2)");
 
+    // meter wraps a phrase in a time-signature Control (shown as meter(n/d, ...))
+    CHECK_EQ_STR(eval::show_value(run_main("meter 3 4 (c' d' e')")),
+                 "meter(3/4, ((C4:1/4 :+: D4:1/4) :+: E4:1/4))");
+    // `|` barline sequences two measures with a boundary marker between them
+    CHECK_EQ_STR(eval::show_value(run_main("c'4 | d'4")),
+                 "(C4:1/4 :+: (| :+: D4:1/4))");
+    // a bare pitch lifts in meter (Phrase), like tempo/velocity
+    CHECK_EQ_STR(eval::show_value(run_main("meter 2 2 c'")), "meter(2/2, C4:1/4)");
+
     // ---- comparison: pitch ordering (by height) + deep Music/== --------
     CHECK_EQ_STR(eval::show_value(run_main("c' < d'")), "True");   // C4 below D4
     CHECK_EQ_STR(eval::show_value(run_main("e' > c'")), "True");

@@ -54,7 +54,7 @@ enum BuiltinId {
     B_MLEFT, B_MRIGHT,
     B_TUPLET,
     B_WITHINST, B_SFZ, B_GM,
-    B_TEMPO, B_VELOCITY,
+    B_TEMPO, B_VELOCITY, B_METER,
 };
 
 struct BuiltinInfo { const char* name; int id; int arity; };
@@ -83,6 +83,7 @@ const BuiltinInfo kBuiltins[] = {
     {"gm", B_GM, 1},
     {"tempo", B_TEMPO, 2},
     {"velocity", B_VELOCITY, 2},
+    {"meter", B_METER, 3},
 };
 
 // Interval name -> (diatonic steps, semitones). Enough common ones to be useful.
@@ -370,6 +371,17 @@ Value call_builtin(Interp& I, int id, std::vector<Value>& a) {
             music::MusicId child = to_music(I, a[1]);
             return music_value(I, music::control_velocity(*I.music, static_cast<int>(v), child));
         }
+        // ---- meter: wrap a phrase in a time-signature Control node ----------
+        case B_METER: {
+            long long num = a[0].i, den = a[1].i;
+            if (num <= 0 || den <= 0) {
+                I.errors.push_back("meter needs a positive numerator and denominator");
+                return a[2];
+            }
+            music::MusicId child = to_music(I, a[2]);
+            return music_value(I, music::control_meter(*I.music, static_cast<int>(num),
+                                                       static_cast<int>(den), child));
+        }
     }
     I.errors.push_back("unknown builtin");
     return v_unit();
@@ -633,6 +645,15 @@ Value eval(Interp& I, NodeId id, const std::shared_ptr<Env>& env) {
             if (op == "|>") return apply(I, std::move(r), std::move(l)); // x |> f = f x
             if (op == ":+:") return music_value(I, music::seq(*I.music, to_music(I, l), to_music(I, r)));
             if (op == ":=:") return music_value(I, music::par(*I.music, to_music(I, l), to_music(I, r)));
+            if (op == "|") {
+                // barline: sequence the two measures with a boundary marker between
+                // them — Seq(a, Seq(Barline, b)). The timing pass validates each
+                // measure against the active meter; otherwise it is inert.
+                music::MusicId a = to_music(I, l);
+                music::MusicId b = to_music(I, r);
+                music::MusicId bl = music::barline(*I.music);
+                return music_value(I, music::seq(*I.music, a, music::seq(*I.music, bl, b)));
+            }
             if (op == "~") {
                 // tie: matching phrases (note, chord, …) join with summed durations.
                 // Operands lift to Music, so it works on pitches, chords, and ties

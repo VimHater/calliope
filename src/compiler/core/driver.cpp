@@ -1,5 +1,6 @@
 #include "driver.hpp"
 
+#include "backend/score.hpp"
 #include "lexer.hpp"
 #include "parser.hpp"
 #include "typecheck.hpp"
@@ -127,12 +128,25 @@ bool ok(const Compilation& c) {
     return c.parse_errors.empty() && c.type_errors.empty() && c.runtime_errors.empty();
 }
 
+namespace {
+// When `main` (or the REPL's `it`) is Music, check its barlines against any active
+// meter — bar errors surface at compile time, for every entry point, not just at
+// render. (No meter / no `|` => no-op.)
+void validate_meter(Compilation& out) {
+    if (out.main_value.kind != eval::ValueKind::Music || !out.main_value.mus) return;
+    std::vector<std::string> errs;
+    backend::flatten(*out.main_value.mus, out.main_value.mroot, &errs);
+    for (const std::string& e : errs) out.runtime_errors.push_back("meter error: " + e);
+}
+} // namespace
+
 void compile(std::string_view program, const LoadOptions& opts, Compilation& out) {
     assemble(program, opts, out.sources, out.ast, out.parse_errors);
     out.main_type = types::infer_named_type(out.ast, "main", out.type_errors);
     auto env = eval::eval_program(out.ast, out.interp);
     out.has_main = eval::env_lookup(env, "main", out.main_value);
     out.runtime_errors = out.interp.errors;
+    validate_meter(out);
 }
 
 std::string type_of_main(std::string_view program, const LoadOptions& opts,
@@ -160,6 +174,7 @@ void compile_expr(std::string_view session, std::string_view expr,
     auto env = eval::eval_program(out.ast, out.interp);
     out.has_main = eval::env_lookup(env, "it", out.main_value);
     out.runtime_errors = out.interp.errors;
+    validate_meter(out);
 }
 
 std::string type_of_expr(std::string_view session, std::string_view expr,

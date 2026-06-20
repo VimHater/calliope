@@ -1,0 +1,27 @@
+-- meter.cal — time signatures and barlines that actually *do* something.
+--
+-- `meter n d` wraps a phrase in a time signature; it is not just a label:
+--   * strong beats are accented, so the same notes sound different under a
+--     different meter (the downbeat is loudest, then the mid-bar beat);
+--   * a `|` barline checks the measure before it — if a measure doesn't fill
+--     exactly one bar of the meter, compiling reports it ("bar 3: 5/4 in a 4/4
+--     meter"). Try breaking a bar below and re-running to see the error.
+--
+-- Run it:
+--   calliope --debug examples/meter.cal      -- print the Music IR
+--   calliopei examples/meter.cal             -- play it (hear the downbeat accent)
+
+#load "prelude"
+
+-- a one-bar-per-line 4/4 melody; each `|` asserts a full 4/4 measure and carries
+-- the phrase onto the next line (a bare run of notes can't cross a line break on
+-- its own — so the last bar has no trailing `|`)
+tune =
+  c'4 d'4 e'4 f'4 |
+  g'4 a'4 b'4 c''4 |
+  c''4 b'4 a'4 g'4 |
+  f'4 e'4 d'4 c'4
+
+-- `commonTime` = `meter 4 4`; the timing pass accents beats 1 and 3 of every bar
+main :: Music
+main = commonTime tune

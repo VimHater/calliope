@@ -244,14 +244,27 @@ Two backends exist. **MIDI** (`backend/midi.cpp`) writes a .mid file; **audio**
 (`--emit wav --soundfont <file.sfz>`). Both share `backend/score.cpp`'s `flatten`
 (Seq concat, Par overlay, Rest advance) — the explicit-but-minimal score IR seed,
 so the time walk is no longer duplicated. **`Control` nodes carry instrument, tempo
-(`tempo :: Int -> Music -> Music`) and velocity (`velocity :: Int -> Music ->
-Music`)** — `flatten` resolves tempo into absolute seconds (polytempo across `par`
-voices works) and stamps each note's velocity; both backends honor them. Not yet
+(`tempo :: Int -> Music -> Music`), velocity (`velocity :: Int -> Music -> Music`)
+and meter (`meter :: Int -> Int -> Music -> Music`, a time signature)** — `flatten`
+resolves tempo into absolute seconds (polytempo across `par` voices works) and stamps
+each note's velocity; both backends honor them.
+
+**Meter + bars are functional, not metadata** (spec §8). `meter n d` is a `Control`
+axis (`meter_num`/`meter_den` on `MusicNode`); the `|` **barline** operator (the
+previously-unused `Bar` token, lowest infix precedence) builds a `MusicKind::Barline`
+marker — `a | b` = `Seq(a, Seq(Barline, b))`. `flatten` *reads* the meter for two
+real effects: (1) **strong-beat accent** — it tracks musical (whole-note) position
+alongside seconds and boosts the velocity of downbeat / mid-bar (simple) / every-third
+(compound) onsets, so the same notes sound different under different meters; (2)
+**bar validation** — when given an errors sink, each `|` measure must fill exactly one
+bar of the active meter, else a message (`"bar 3: 5/4 in a 4/4 meter"`). The driver
+runs the validation after eval (when `main`/`it` is Music), so bar errors surface at
+compile time for every entry point. Prelude sugar: `commonTime` (4/4) `cutTime` (2/2)
+`waltz` (3/4). Note durations stay absolute exact rationals (O11 untouched). Not yet
 built: octave-resolution pass (absolute works inline; `#relative` needs it), a richer
-score IR + live-playback / MusicXML backends, more prelude (intervals as a monoid,
-scales/keys, chords/harmony — and the remaining `Modify` axes: key/dynamics).
-Bootstrap: step 1 ✓ →
-step 2 ✓ → step 3 (in progress).
+score IR + MusicXML backend, a MIDI time-signature meta event, more prelude (intervals
+as a monoid, scales/keys, chords/harmony — and the remaining `Modify` axes:
+key/dynamics-by-name). Bootstrap: step 1 ✓ → step 2 ✓ → step 3 (in progress).
 
 ## Architecture (intended)
 

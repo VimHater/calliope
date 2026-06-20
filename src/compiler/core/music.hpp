@@ -18,6 +18,7 @@
 //   Seq  a b   (:+:)    a then b
 //   Par  a b   (:=:)    a together with b
 //   Control inst child  a `Modify` node: assign an instrument to a sub-phrase
+//   Barline             a zero-duration measure boundary (the `|` operator)
 //
 // `Control` is the `Modify` family (spec §8). It wraps a single child (in `left`)
 // and carries exactly one control payload along one axis (the others stay unset, so
@@ -26,15 +27,21 @@
 //                  number (`gm "<n>"`); for the latter two instrument stays -1
 //   • tempo      — beats per minute (`tempo` >= 0 means set)
 //   • velocity   — note-on velocity 0..127 (`velocity` >= 0 means set)
+//   • meter      — time signature (`meter_num`/`meter_den` >= 0 means set); the
+//                  timing pass reads it for strong-beat accent + bar validation
 // The payload stays abstract here; the flatten seam / backends resolve it. Note
 // durations are exact `Rational` whole-note fractions (quarter = 1/4), per spec O11.
+//
+// `Barline` is a marker, not a wrapper: it sits in a Seq between two measures (`a |
+// b` = Seq(a, Seq(Barline, b))) and carries no time. The timing pass uses it to
+// check each measure fills the active meter; it is otherwise inert.
 
 namespace calliope::music {
 
 using MusicId = std::int32_t;
 constexpr MusicId NoMusic = -1;
 
-enum class MusicKind : std::uint8_t { Note, Rest, Seq, Par, Control };
+enum class MusicKind : std::uint8_t { Note, Rest, Seq, Par, Control, Barline };
 
 struct MusicNode {
     MusicKind kind = MusicKind::Rest;
@@ -47,6 +54,8 @@ struct MusicNode {
     int gm = -1;                 // Control: raw GM program number (-1 = unset)
     int tempo = -1;              // Control: beats per minute (-1 = unset)
     int velocity = -1;           // Control: note-on velocity 0..127 (-1 = unset)
+    int meter_num = -1;          // Control: time-signature numerator (-1 = unset)
+    int meter_den = -1;          // Control: time-signature denominator (-1 = unset)
 };
 
 struct Music {
@@ -63,6 +72,8 @@ MusicId control(Music& m, int instrument, MusicId child); // sfz_path = "" (name
 MusicId control_gm(Music& m, int gm, MusicId child);      // raw GM program number
 MusicId control_tempo(Music& m, int bpm, MusicId child);
 MusicId control_velocity(Music& m, int velocity, MusicId child);
+MusicId control_meter(Music& m, int num, int den, MusicId child); // time signature
+MusicId barline(Music& m);                                // a measure boundary marker
 
 // Transpose every Note in the subtree by (diatonic steps, semitones); Rests and
 // structure are preserved. Returns a fresh subtree (input is left untouched).

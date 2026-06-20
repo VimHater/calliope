@@ -212,3 +212,14 @@ triplet phrase = tuplet 3 2 phrase
 -- pitch lifts to a one-note phrase, so `onInstrument Cello c` works too
 onInstrument :: Phrase t => Instrument -> t -> Music
 onInstrument inst phrase = withInstrument inst phrase
+
+-- common time signatures (over the `meter` axiom): wrap a phrase so the timing
+-- pass accents its strong beats and `|` barlines are checked against the meter
+commonTime :: Phrase t => t -> Music
+commonTime phrase = meter 4 4 phrase
+
+cutTime :: Phrase t => t -> Music
+cutTime phrase = meter 2 2 phrase
+
+waltz :: Phrase t => t -> Music
+waltz phrase = meter 3 4 phrase

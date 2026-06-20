@@ -157,6 +157,14 @@ void run_typecheck_tests() {
     CHECK_EQ_STR(type_of("main = velocity 100 (c d e)", "main"), "Music");
     CHECK(has_type_error("main = tempo c' (c d e)")); // Int expected, Pitch given
 
+    // meter takes two Ints then a Phrase; `|` is a phrase combinator like :+:
+    CHECK_EQ_STR(type_of("main = meter 4 4 (c d e)", "main"), "Music");
+    CHECK_EQ_STR(type_of("main = meter 3 4 c'", "main"), "Music");   // bare pitch lifts
+    CHECK(has_type_error("main = meter c' 4 (c d e)"));              // Int expected
+    CHECK_EQ_STR(type_of("main = c'4 | d'4", "main"), "Music");      // barline
+    CHECK_EQ_STR(type_of("main = (c d e) | (f g a)", "main"), "Music");
+    CHECK(has_type_error("main = 1 | 2"));                          // no Phrase Int
+
     // the Control builders take a Phrase, so a bare pitch lifts (no Music wrapper)
     CHECK_EQ_STR(type_of("main = tempo 90 c'", "main"), "Music");
     CHECK_EQ_STR(type_of("main = velocity 40 c'", "main"), "Music");

@@ -79,6 +79,21 @@ MusicId control_velocity(Music& m, int velocity, MusicId child) {
     return add(m, n);
 }
 
+MusicId control_meter(Music& m, int num, int den, MusicId child) {
+    MusicNode n;
+    n.kind = MusicKind::Control;
+    n.meter_num = num;
+    n.meter_den = den;
+    n.left = child;
+    return add(m, n);
+}
+
+MusicId barline(Music& m) {
+    MusicNode n;
+    n.kind = MusicKind::Barline;
+    return add(m, n);
+}
+
 namespace {
 // Rebuild a Control over a new child, preserving every control axis. Used by the
 // tree walks so they don't have to know which axis a given Control carries.
@@ -90,6 +105,8 @@ MusicId rewrap_control(Music& m, const MusicNode& src, MusicId child) {
     n.gm = src.gm;
     n.tempo = src.tempo;
     n.velocity = src.velocity;
+    n.meter_num = src.meter_num;
+    n.meter_den = src.meter_den;
     n.left = child;
     return add(m, n);
 }
@@ -119,6 +136,8 @@ MusicId transpose(Music& m, MusicId id, int dstep, int dsemi) {
         }
         case MusicKind::Control:
             return rewrap_control(m, n, transpose(m, n.left, dstep, dsemi));
+        case MusicKind::Barline:
+            return barline(m);
     }
     return NoMusic;
 }
@@ -141,6 +160,8 @@ MusicId scale_dur(Music& m, MusicId id, Rational factor) {
         }
         case MusicKind::Control:
             return rewrap_control(m, n, scale_dur(m, n.left, factor));
+        case MusicKind::Barline:
+            return barline(m);
     }
     return NoMusic;
 }
@@ -163,7 +184,10 @@ bool equal(const Music& m, MusicId a, MusicId b) {
         case MusicKind::Control:
             return na.instrument == nb.instrument && na.sfz_path == nb.sfz_path &&
                    na.gm == nb.gm && na.tempo == nb.tempo && na.velocity == nb.velocity &&
+                   na.meter_num == nb.meter_num && na.meter_den == nb.meter_den &&
                    equal(m, na.left, nb.left);
+        case MusicKind::Barline:
+            return true; // kinds already match; barlines carry no data
     }
     return false;
 }
@@ -186,6 +210,8 @@ MusicId set_dur(Music& m, MusicId id, Rational dur) {
         }
         case MusicKind::Control:
             return rewrap_control(m, n, set_dur(m, n.left, dur));
+        case MusicKind::Barline:
+            return barline(m);
     }
     return NoMusic;
 }
@@ -213,11 +239,14 @@ MusicId tie(Music& m, MusicId a, MusicId b, bool& ok) {
         }
         case MusicKind::Control:
             if (na.instrument != nb.instrument || na.sfz_path != nb.sfz_path ||
-                na.gm != nb.gm || na.tempo != nb.tempo || na.velocity != nb.velocity) {
+                na.gm != nb.gm || na.tempo != nb.tempo || na.velocity != nb.velocity ||
+                na.meter_num != nb.meter_num || na.meter_den != nb.meter_den) {
                 ok = false;
                 return NoMusic;
             }
             return rewrap_control(m, na, tie(m, na.left, nb.left, ok));
+        case MusicKind::Barline:
+            return barline(m);
     }
     ok = false;
     return NoMusic;
@@ -246,11 +275,15 @@ std::string show(const Music& m, MusicId id) {
             return "(" + show(m, n.left) + " :+: " + show(m, n.right) + ")";
         case MusicKind::Par:
             return "(" + show(m, n.left) + " :=: " + show(m, n.right) + ")";
+        case MusicKind::Barline: return "|";
         case MusicKind::Control: {
             if (n.tempo >= 0)
                 return "tempo(" + std::to_string(n.tempo) + ", " + show(m, n.left) + ")";
             if (n.velocity >= 0)
                 return "vel(" + std::to_string(n.velocity) + ", " + show(m, n.left) + ")";
+            if (n.meter_num >= 0)
+                return "meter(" + std::to_string(n.meter_num) + "/" +
+                       std::to_string(n.meter_den) + ", " + show(m, n.left) + ")";
             std::string name;
             if (!n.sfz_path.empty()) name = "\"" + n.sfz_path + "\"";
             else if (n.gm >= 0) name = "gm " + std::to_string(n.gm);
