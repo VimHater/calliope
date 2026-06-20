@@ -1,0 +1,22 @@
+-- key.cal — key signatures that respell bare letters.
+--
+-- In Calliope a bare letter is a *floating* natural: on its own `f` is F natural,
+-- but `inKey` snaps it to the key. So you can write a D-major tune with plain
+-- letters and let the key supply the sharps — while an explicit `fis`/`ges` always
+-- wins, and with no key the letter stays natural. (Key is independent of the
+-- relative/absolute octave mode — they resolve different things.)
+
+#load "prelude"
+
+-- a D-major scale typed with bare letters: inKey makes the f's and c's sharp
+tune = d' e' f' g' a' b' c'' d''
+
+dMajor = inKey (major d') tune     -- D E F# G A B C# D
+bMinor = inKey (minor b') tune     -- the relative minor — same two sharps
+
+-- the same line shifted up a third *within* the key (stays diatonic)
+answer = diatonicUp (major d') 2 tune
+
+-- D-major scale, its relative minor, then the diatonic answer
+main :: Music
+main = line [dMajor, bMinor, answer]
