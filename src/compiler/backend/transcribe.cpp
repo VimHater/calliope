@@ -440,27 +440,43 @@ std::string render_run(const Score& s, const std::vector<Note>& n) {
         return !n[x].rest && !n[y].rest && n[x].letter == n[y].letter &&
                n[x].alter == n[y].alter && n[x].octave == n[y].octave;
     };
+    auto unit_end = [&](std::size_t a) {
+        std::size_t b = a + 1; while (b < n.size() && n[b].chord) b++; return b;
+    };
+    // a unit (note or chord) is tied forward if any of its notes carries a tie start
+    auto unit_tied = [&](std::size_t a, std::size_t b) {
+        for (std::size_t k = a; k < b; k++) if (!n[k].rest && n[k].tie_start) return true;
+        return false;
+    };
+    // two units are the same shape: equal note count, element-wise same pitch (chords
+    // are listed bottom-up consistently, so positional comparison holds)
+    auto same_unit = [&](std::size_t a, std::size_t b, std::size_t c, std::size_t d) {
+        if (b - a != d - c) return false;
+        for (std::size_t t = 0; t < b - a; t++)
+            if (!same_pitch(a + t, c + t)) return false;
+        return true;
+    };
     std::size_t i = 0;
     while (i < n.size()) {
-        std::size_t j = i + 1;
-        while (j < n.size() && n[j].chord) j++;
+        std::size_t j = unit_end(i);
 
-        // tie chain (single notes only): `~`-join consecutive same-pitch notes
-        if (n[i].tie_start && j - i == 1 && j < n.size() && (j + 1 >= n.size() || !n[j + 1].chord) &&
-            same_pitch(i, j)) {
+        // tie chain: `~`-join consecutive same-shape units (notes OR chords) while the
+        // current unit is tied forward and the next unit matches its pitches. Without
+        // this a tied chord would re-attack -> an audible duplicate.
+        std::size_t jn = j < n.size() ? unit_end(j) : j;
+        if (!n[i].rest && unit_tied(i, j) && j < n.size() && same_unit(i, j, j, jn)) {
             flush();
             std::string tok = literal(s, n, i, j);
-            std::size_t k = j;
-            while (k < n.size()) {
-                std::size_t kj = k + 1;
-                tok += " ~ " + literal(s, n, k, kj);
-                bool cont = n[k].tie_start && kj < n.size() &&
-                            (kj + 1 >= n.size() || !n[kj + 1].chord) && same_pitch(k, kj);
-                k = kj;
+            std::size_t a = i, b = j;
+            while (b < n.size()) {
+                std::size_t c = unit_end(b);
+                tok += " ~ " + literal(s, n, b, c);
+                bool cont = unit_tied(b, c) && c < n.size() && same_unit(b, c, c, unit_end(c));
+                a = b; b = c; (void)a;
                 if (!cont) break;
             }
             tokens.push_back(tok);
-            i = k;
+            i = b;
             continue;
         }
 
