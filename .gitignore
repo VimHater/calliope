@@ -2,7 +2,6 @@ compile_commands.json
 
 calliope
 calliope_tests
-musicxml/
 *.o
 *.obj
 *.a
@@ -17,6 +16,7 @@ musicxml/
 *.wav
 *.mp4
 *.mp3
+*.cal
 
 *.swp
 *~
