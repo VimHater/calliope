@@ -24,4 +24,4 @@ theme = motif :+: c''8 :+: r8
 main = theme |> meter 2 4 |> tempo 120
 ```
 
-<video src=demo.mp4 controls></video>
+https://github.com/VimHater/calliope/blob/main/demo.mp4
