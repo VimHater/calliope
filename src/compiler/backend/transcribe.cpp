@@ -183,7 +183,7 @@ bool parse_xml(const std::string& xml, Score& score, std::string& err) {
     bool in_dynamics = false, in_metronome = false;
     int dur_target = 0;       // 0 note, 1 backup, 2 forward
     std::string mm_beat_unit;
-    int mm_per_minute = 0;
+    int mm_per_minute = 0, mm_dots = 0;
     bool note_is_grace = false, pedal_down = false, have_grace = false;
     int grace_voice = 0;
     int os_dir = 0, os_oct = 1, active_oshift = 0;  // octave-shift span state
@@ -217,7 +217,7 @@ bool parse_xml(const std::string& xml, Score& score, std::string& err) {
             else if (tag_is("backup"))    { dur_target = 1; }
             else if (tag_is("forward"))   { dur_target = 2; }
             else if (tag_is("dynamics"))  { in_dynamics = true; }
-            else if (tag_is("metronome")) { in_metronome = true; mm_beat_unit.clear(); mm_per_minute = 0; }
+            else if (tag_is("metronome")) { in_metronome = true; mm_beat_unit.clear(); mm_per_minute = 0; mm_dots = 0; }
         } else if (code == HOXML_ATTRIBUTE) {
             const char* a = ctx.attribute;
             const char* v = ctx.value;
@@ -278,6 +278,7 @@ bool parse_xml(const std::string& xml, Score& score, std::string& err) {
                 if (measure_index >= 1) score.measure_dyn[measure_index] = dyn_name(ctx.tag);
             }
             else if (in_metronome && tag_is("beat-unit"))  mm_beat_unit = lower(content);
+            else if (in_metronome && tag_is("beat-unit-dot")) mm_dots++;
             else if (in_metronome && tag_is("per-minute")) mm_per_minute = std::atoi(content.c_str());
             else if (!in_note && tag_is("duration")) {   // <backup>/<forward> duration
                 int d = std::atoi(content.c_str());
@@ -295,7 +296,15 @@ bool parse_xml(const std::string& xml, Score& score, std::string& err) {
             else if (tag_is("metronome")) {
                 int d = denom_of_type(mm_beat_unit);
                 if (d > 0 && mm_per_minute > 0 && !score.has_tempo) {
-                    score.has_tempo = true; score.tempo = mm_per_minute * 4 / d;
+                    // quarter BPM = per-minute * (4/d) * dot-factor, where one dot
+                    // lengthens the beat by 3/2 (k dots: (2^(k+1)-1)/2^k). A dotted
+                    // beat unit (♩.= 96) is a faster quarter tempo (= 144), not slower.
+                    int num = 1, den = 1;
+                    if (mm_dots > 0) { den = 1 << mm_dots; num = (1 << (mm_dots + 1)) - 1; }
+                    long long t = static_cast<long long>(mm_per_minute) * 4 * num;
+                    long long dd = static_cast<long long>(d) * den;
+                    score.has_tempo = true;
+                    score.tempo = static_cast<int>((t + dd / 2) / dd);
                 }
                 in_metronome = false;
             }
@@ -688,7 +697,7 @@ void report_unsupported(const std::set<std::string>& seen) {
         "tie", "tied", "time-modification", "actual-notes", "normal-notes", "tuplet",
         "notations", "articulations", "staccato", "accent", "tenuto", "strong-accent",
         "ornaments", "trill-mark", "mordent", "inverted-mordent", "turn", "inverted-turn",
-        "direction", "direction-type", "dynamics", "metronome", "beat-unit", "per-minute",
+        "direction", "direction-type", "dynamics", "metronome", "beat-unit", "beat-unit-dot", "per-minute",
         "f", "p", "mf", "mp", "ff", "pp", "fff", "ppp",
         "pppp", "ppppp", "pppppp", "ffff", "fffff", "ffffff", "n",
         "sf", "sfz", "sffz", "fz", "sforzando", "sforzato",
