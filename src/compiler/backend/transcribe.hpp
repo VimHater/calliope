@@ -20,21 +20,30 @@
 // since Calliope accepts any denominator a triplet eighth is simply `:12` (1/12) —
 // tuplets are native, no wrapper or <type> guessing.
 //
-// Covered: pitches (spelled exactly — key is a comment, no `inKey`), durations, rests,
-// chords, multiple parts AND <voice>s (each a parallel `:=:` line, correctly offset),
-// pickups (<measure implicit>), time signature, tempo (<sound> and <metronome>),
-// **ties** (`~`), **articulations** (staccato/accent/tenuto/strong-accent),
-// **ornaments** (trill/mordent/turn), **dynamics** (forte/piano/… per run),
+// Covered: pitches, durations, rests, chords, multiple parts AND <voice>s (each a
+// parallel `:=:` line, correctly offset), pickups (<measure implicit>), time
+// signature, tempo (<sound> and <metronome>, incl. a dotted beat-unit), **ties**
+// (`~`), **articulations** (staccato/accent/tenuto/strong-accent), **ornaments**
+// (trill/mordent/turn), **dynamics** (forte/piano/sf/fp/… part-wide, hoisted to the
+// whole piece when constant, else wrapped once per same-dynamic region),
 // **grace notes** (-> `acciaccatura`), the **damper pedal** (<pedal> -> `sustain`),
-// and **dynamics part-wide** — a `<dynamics>` snaps to its measure and applies to
-// every voice (a `pp` lowers both hands), like an engraver intends.
-// Tags seen but not transcribed are reported on stderr.
+// **octave-shift** (8va/8vb -> `ottava`), **cresc/dim wedges** (-> a baked velocity
+// ramp), **arpeggiate** (-> a staggered roll), and **repeats / endings** (unrolled
+// into the play order). Tags seen but not transcribed are reported on stderr.
 //
-// Barlines are not emitted: an approximated duration (a 7-tuplet at low divisions)
-// can still make a measure not sum to a whole bar, which a `|` would reject.
+// Output is structured for reading: each line is named by its **hand/staff** (a
+// grand-staff piano becomes `rightHand` / `leftHand`, by `<staff>`; extra voices get
+// a numeric suffix, a single staff stays `line`, multiple parts get a `partN_`
+// prefix), with a comment above; one **bar per line**, joined by the `|` barline
+// when every measure provably fills the meter (else `:+:`, since a `|` is validated
+// at compile time); a **repeated bar is named once and reused** (`m1`, `m2`, …); and
+// transforms read left-to-right through the **pipe** (`run |> forte`, `… |> tempo`).
+// When the score is fully diatonic to its key, pitches are spelled bare and a single
+// `inKey <fifths>` resolves them; otherwise accidentals are explicit (the language
+// has no natural sign, so a key contrary to a note can't be respelled safely).
 //
-// TODO: slurs / cresc-dim wedges, repeats / endings, fermata, lyrics, octave-shift;
-// mid-piece meter/key/tempo changes; then validated barlines.
+// TODO: slurs, fermata, glissando/slide, coda/segno (D.S./D.C.), lyrics;
+// mid-piece key changes.
 
 namespace calliope::transcribe {
 

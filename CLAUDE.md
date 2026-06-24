@@ -44,6 +44,14 @@ Frontend first cut exists; nothing executes music yet.
   playback — that's `calliopei`'s job). **Behavior keys off the input *and* output
   extension.** A **MusicXML input** (`.mxl`/`.xml`/`.musicxml`) is *transcribed* to
   Calliope source (`backend/transcribe`) — `-o <out>.cal`, or stdout with no `-o`.
+  The transcriber emits **structured** source: each line **named by hand/staff**
+  (grand-staff piano → `rightHand`/`leftHand` via `<staff>`, with a comment);
+  one **bar per line** (joined by the
+  `|` barline when every measure provably fills the meter, else `:+:`), a **repeated
+  bar named once and reused** (`m1`/`m2`/…), transforms read through the **pipe**
+  (`run |> forte`, `… |> tempo`), and **repeats/endings unrolled** into the play
+  order. Bare-letter spelling + a single `inKey <fifths>` only when the score is
+  fully diatonic (no natural sign to override a key), else explicit accidentals.
   A **`.cal` input** compiles as before: `-o <file>` picks the backend by extension
   (`.mid`/`.midi` → MIDI, `.wav` → audio, `.ir` → Music IR text; `.mp3`/`.mp4`
   recognized too); `--emit ir|midi|wav` forces it; **with neither, the default is

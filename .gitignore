@@ -2,13 +2,6 @@ compile_commands.json
 
 calliope
 calliope_tests
-*.o
-*.obj
-*.a
-*.lib
-*.so
-*.dylib
-*.dll
 *.exe
 *.mxl
 *.musicxml

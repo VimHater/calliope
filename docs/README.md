@@ -28,6 +28,8 @@ is in [`../CLAUDE.md`](../CLAUDE.md).
 - **[builtins.md](./builtins.md)** — the thin C++ core: operators and primitive
   functions (arithmetic, comparison, list axioms, pitch projections, Music tree
   axioms, transposition).
+- **[axioms.md](./axioms.md)** — the complete axiom reference: every irreducible
+  C++ primitive (programming + music) with its type, and the C++/stdlib boundary.
 - **[stdlib.md](./stdlib.md)** — the standard library written in Calliope
   (`standard_library/prelude.cal`): list helpers and music transforms.
 
