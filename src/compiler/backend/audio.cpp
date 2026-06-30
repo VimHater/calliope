@@ -257,6 +257,9 @@ struct PlaybackState {
     std::atomic<std::size_t> ready{0};    // frames safely rendered (playback fence)
     std::atomic<std::size_t> frame{0};    // playback cursor
     std::atomic<bool> done{false};        // renderer finished
+    std::atomic<bool> paused{false};      // hold the cursor + emit silence
+    std::atomic<long long> seek{-1};      // pending seek target (frames; -1 = none)
+    std::atomic<bool> stop{false};        // ask the render thread to bail early
 };
 
 void playback_callback(ma_device* dev, void* out, const void* in, ma_uint32 frames) {
@@ -264,7 +267,15 @@ void playback_callback(ma_device* dev, void* out, const void* in, ma_uint32 fram
     PlaybackState* st = static_cast<PlaybackState*>(dev->pUserData);
     float* dst = static_cast<float*>(out);
     std::size_t pos = st->frame.load(std::memory_order_relaxed);
+    // honour a pending seek atomically inside the callback (no torn cursor)
+    long long sk = st->seek.exchange(-1, std::memory_order_acq_rel);
+    if (sk >= 0) pos = static_cast<std::size_t>(sk);
     std::size_t ready = st->ready.load(std::memory_order_acquire);
+    if (st->paused.load(std::memory_order_relaxed)) {
+        for (ma_uint32 i = 0; i < 2 * frames; ++i) dst[i] = 0.0f; // silence, cursor frozen
+        st->frame.store(pos, std::memory_order_relaxed);          // (a seek still applies)
+        return;
+    }
     for (ma_uint32 i = 0; i < frames; ++i) {
         if (pos < ready) { dst[2 * i] = st->master[2 * pos]; dst[2 * i + 1] = st->master[2 * pos + 1]; ++pos; }
         else             { dst[2 * i] = 0.0f; dst[2 * i + 1] = 0.0f; } // underrun: hold
@@ -280,7 +291,8 @@ float clamp1(float s) { return s < -1.0f ? -1.0f : (s > 1.0f ? 1.0f : s); }
 void stream_group_into(int inst, const std::string& path, int gmprog,
                        const std::vector<SampleEv>& evs, long long last_end,
                        const AudioOptions& opt, float* dst, long long cap,
-                       std::atomic<std::size_t>& ready) {
+                       std::atomic<std::size_t>& ready, const std::atomic<bool>* stop = nullptr) {
+    auto stopped = [&]() { return stop && stop->load(std::memory_order_relaxed); };
     std::string sfz;
     int gm = 0;
     if (gmprog >= 0) gm = gmprog;
@@ -304,6 +316,7 @@ void stream_group_into(int inst, const std::string& path, int gmprog,
             for (long long pos = 0;
                  pos < cap && (pos < last_end || sfizz_get_num_active_voices(s) > 0);
                  pos += BLOCK) {
+                if (stopped()) break;
                 while (ei < evs.size() && evs[ei].sample < pos + BLOCK) {
                     int delay = static_cast<int>(evs[ei].sample - pos);
                     if (delay < 0) delay = 0;
@@ -334,6 +347,7 @@ void stream_group_into(int inst, const std::string& path, int gmprog,
             for (long long pos = 0;
                  pos < cap && (pos < last_end || tsf_active_voice_count(f) > 0);
                  pos += BLOCK) {
+                if (stopped()) break;
                 while (ei < evs.size() && evs[ei].sample < pos + BLOCK) {
                     if (evs[ei].on) tsf_channel_note_on(f, 0, evs[ei].key,
                                        static_cast<float>(evs[ei].velocity) / 127.0f);
@@ -355,10 +369,21 @@ void stream_group_into(int inst, const std::string& path, int gmprog,
 
 } // namespace
 
-bool play(const music::Music& m, music::MusicId root,
-          const AudioOptions& opt, std::string& err) {
+// An in-flight live playback: owns the streamed buffer + fence (PlaybackState), the
+// miniaudio device, and the background render thread. Opaque to callers (the header
+// forward-declares it) — created by play_start, polled, and freed by play_stop. This
+// is what a visualizer drives: poll playback_seconds() each frame to place a playhead.
+struct Playback {
+    std::unique_ptr<PlaybackState> st;
+    ma_device device;
+    std::thread renderer;
+    int sample_rate = 44100;
+};
+
+Playback* play_start(const music::Music& m, music::MusicId root,
+                     const AudioOptions& opt, std::string& err) {
     std::vector<TimedNote> notes = flatten(m, root);
-    if (notes.empty()) { err = "nothing to play (no notes rendered)"; return false; }
+    if (notes.empty()) { err = "nothing to play (no notes rendered)"; return nullptr; }
 
     // group by instrument (as render_master does)
     std::map<std::string, std::vector<TimedNote>> groups;
@@ -370,8 +395,10 @@ bool play(const music::Music& m, music::MusicId root,
         groups[key].push_back(n);
     }
 
-    auto st = std::make_unique<PlaybackState>();
-    std::thread renderer;
+    auto pb = std::make_unique<Playback>();
+    pb->sample_rate = opt.sample_rate;
+    pb->st = std::make_unique<PlaybackState>();
+    PlaybackState* sp = pb->st.get();
 
     if (groups.size() == 1) {
         // single instrument (the common case — a transcribed piano): render on a
@@ -382,21 +409,20 @@ bool play(const music::Music& m, music::MusicId root,
         long long last_end = 0;
         std::vector<SampleEv> evs = events_of(g, opt, last_end);
         long long cap = last_end + 10LL * opt.sample_rate;     // + a tail for releases
-        st->total_frames = static_cast<std::size_t>(cap);
-        st->master.assign(static_cast<std::size_t>(cap) * 2, 0.0f);
-        PlaybackState* sp = st.get();
-        renderer = std::thread([sp, rep, evs, last_end, cap, opt]() {
+        sp->total_frames = static_cast<std::size_t>(cap);
+        sp->master.assign(static_cast<std::size_t>(cap) * 2, 0.0f);
+        pb->renderer = std::thread([sp, rep, evs, last_end, cap, opt]() {
             stream_group_into(rep.instrument, rep.sfz_path, rep.gm, evs, last_end, opt,
-                              sp->master.data(), cap, sp->ready);
+                              sp->master.data(), cap, sp->ready, &sp->stop);
             sp->done.store(true, std::memory_order_release);
         });
     } else {
         // several instruments: groups must be summed, so render the whole thing
         // first (no safe incremental order), then play the static buffer.
-        st->master = render_master(m, root, opt);
-        st->total_frames = st->master.size() / 2;
-        st->ready.store(st->total_frames);
-        st->done.store(true);
+        sp->master = render_master(m, root, opt);
+        sp->total_frames = sp->master.size() / 2;
+        sp->ready.store(sp->total_frames);
+        sp->done.store(true);
     }
 
     ma_device_config cfg = ma_device_config_init(ma_device_type_playback);
@@ -404,32 +430,68 @@ bool play(const music::Music& m, music::MusicId root,
     cfg.playback.channels = 2;
     cfg.sampleRate        = static_cast<ma_uint32>(opt.sample_rate);
     cfg.dataCallback      = playback_callback;
-    cfg.pUserData         = st.get();
+    cfg.pUserData         = sp;
 
-    ma_device device;
-    if (ma_device_init(nullptr, &cfg, &device) != MA_SUCCESS) {
-        if (renderer.joinable()) renderer.join();
+    if (ma_device_init(nullptr, &cfg, &pb->device) != MA_SUCCESS) {
+        if (pb->renderer.joinable()) pb->renderer.join();
         err = "could not open an audio playback device";
-        return false;
+        return nullptr;
     }
-    if (ma_device_start(&device) != MA_SUCCESS) {
-        ma_device_uninit(&device);
-        if (renderer.joinable()) renderer.join();
+    if (ma_device_start(&pb->device) != MA_SUCCESS) {
+        ma_device_uninit(&pb->device);
+        if (pb->renderer.joinable()) pb->renderer.join();
         err = "could not start the audio playback device";
-        return false;
+        return nullptr;
     }
-    // play until the renderer is finished and the cursor has reached its end
-    for (;;) {
-        bool done = st->done.load(std::memory_order_acquire);
-        std::size_t pos = st->frame.load(std::memory_order_relaxed);
-        std::size_t ready = st->ready.load(std::memory_order_acquire);
-        if (done && pos >= ready) break;
-        std::this_thread::sleep_for(std::chrono::milliseconds(15));
-    }
-    std::this_thread::sleep_for(std::chrono::milliseconds(120)); // flush the last block
+    return pb.release();
+}
 
-    ma_device_uninit(&device);
-    if (renderer.joinable()) renderer.join();
+double playback_seconds(const Playback* p) {
+    if (!p) return 0.0;
+    return static_cast<double>(p->st->frame.load(std::memory_order_relaxed)) / p->sample_rate;
+}
+double playback_total_seconds(const Playback* p) {
+    if (!p) return 0.0;
+    return static_cast<double>(p->st->total_frames) / p->sample_rate;
+}
+bool playback_finished(const Playback* p) {
+    if (!p) return true;
+    bool done = p->st->done.load(std::memory_order_acquire);
+    std::size_t pos = p->st->frame.load(std::memory_order_relaxed);
+    std::size_t ready = p->st->ready.load(std::memory_order_acquire);
+    return done && pos >= ready;
+}
+void play_stop(Playback* p) {
+    if (!p) return;
+    p->st->stop.store(true, std::memory_order_relaxed);   // let the renderer bail early
+    ma_device_uninit(&p->device);
+    if (p->renderer.joinable()) p->renderer.join();
+    delete p;
+}
+
+void playback_set_paused(Playback* p, bool paused) {
+    if (p) p->st->paused.store(paused, std::memory_order_relaxed);
+}
+bool playback_paused(const Playback* p) {
+    return p && p->st->paused.load(std::memory_order_relaxed);
+}
+void playback_seek(Playback* p, double seconds) {
+    if (!p) return;
+    if (seconds < 0) seconds = 0;
+    long long target = static_cast<long long>(seconds * p->sample_rate);
+    long long last = p->st->total_frames ? static_cast<long long>(p->st->total_frames) - 1 : 0;
+    if (target > last) target = last;
+    p->st->seek.store(target, std::memory_order_release);
+}
+
+bool play(const music::Music& m, music::MusicId root,
+          const AudioOptions& opt, std::string& err) {
+    Playback* pb = play_start(m, root, opt, err);
+    if (!pb) return false;
+    while (!playback_finished(pb))
+        std::this_thread::sleep_for(std::chrono::milliseconds(15));
+    std::this_thread::sleep_for(std::chrono::milliseconds(120)); // flush the last block
+    play_stop(pb);
     return true;
 }
 

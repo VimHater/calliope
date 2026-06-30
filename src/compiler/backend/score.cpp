@@ -162,7 +162,53 @@ Len collect(const music::Music& m, music::MusicId id, Rational osec, Rational ob
     return zero;
 }
 
+// Split the *top-level* `:=:` (Par) chain into one note list per voice, collecting
+// each branch with the enclosing Control context (tempo / meter / …) so every voice
+// stays on the same clock as `flatten`. Controls above the split apply to all voices;
+// a Control with a damper pedal isn't split through (its subtree is one voice). Pars
+// *inside* a voice (chords) are left intact — only the outer spine is split.
+void split_voices(const music::Music& m, music::MusicId id, Rational osec, Rational obeat,
+                  Ctx cx, Rational last_bar, std::vector<std::vector<TimedNote>>& voices,
+                  std::vector<std::string>* errors) {
+    const music::MusicNode& n = m.nodes[id];
+    if (n.kind == music::MusicKind::Control && !n.sustain) {
+        Ctx inner = cx;
+        if (n.instrument >= 0 || !n.sfz_path.empty() || n.gm >= 0) {
+            inner.inst = n.instrument; inner.path = n.sfz_path; inner.gm = n.gm;
+        }
+        if (n.tempo >= 0) inner.bpm = n.tempo;
+        if (n.velocity >= 0) inner.velocity = n.velocity;
+        if (n.gate.num > 0) { inner.gate = n.gate; inner.accent = n.accent; }
+        bool new_meter = n.meter_num > 0;
+        if (new_meter) { inner.mnum = n.meter_num; inner.mden = n.meter_den; inner.mstart = obeat; }
+        Rational child_lb = new_meter ? obeat : last_bar;
+        split_voices(m, n.left, osec, obeat, inner, child_lb, voices, errors);
+        return;
+    }
+    if (n.kind == music::MusicKind::Par) {
+        // left is one voice; the right spine carries the remaining voices
+        std::vector<TimedNote> v;
+        Rational lb = last_bar;
+        collect(m, n.left, osec, obeat, cx, lb, v, errors);
+        voices.push_back(std::move(v));
+        split_voices(m, n.right, osec, obeat, cx, last_bar, voices, errors);
+        return;
+    }
+    // a leaf voice (Seq / Note / pedalled subtree): collect it whole
+    std::vector<TimedNote> v;
+    Rational lb = last_bar;
+    collect(m, id, osec, obeat, cx, lb, v, errors);
+    voices.push_back(std::move(v));
+}
+
 } // namespace
+
+std::vector<std::vector<TimedNote>> flatten_voices(const music::Music& m, music::MusicId root) {
+    std::vector<std::vector<TimedNote>> voices;
+    split_voices(m, root, rational_from_int(0), rational_from_int(0), Ctx{},
+                 rational_from_int(0), voices, nullptr);
+    return voices;
+}
 
 std::vector<TimedNote> flatten(const music::Music& m, music::MusicId root,
                                std::vector<std::string>* errors) {

@@ -42,4 +42,10 @@ struct TimedNote {
 std::vector<TimedNote> flatten(const music::Music& m, music::MusicId root,
                                std::vector<std::string>* errors = nullptr);
 
+// Like flatten, but split into one note list per *voice* — the branches of the
+// top-level `:=:` (Par) chain, each on the same clock (enclosing tempo/meter applied).
+// One voice if the piece isn't a top-level parallel. For the visualizer's per-voice
+// rows. (Chords — Pars inside a voice — are not split.)
+std::vector<std::vector<TimedNote>> flatten_voices(const music::Music& m, music::MusicId root);
+
 } // namespace calliope::backend

@@ -44,4 +44,25 @@ bool write_wav(const music::Music& m, music::MusicId root,
 bool play(const music::Music& m, music::MusicId root,
           const AudioOptions& opt, std::string& err);
 
+// ---- non-blocking playback (for a synced visualizer) ---------------------
+// `play` above blocks; these split it so another loop (a raylib window) can run
+// while audio streams. `play_start` opens the device and begins playing on a
+// background thread, returning an opaque handle (nullptr + `err` on failure).
+// Poll `playback_seconds` for the playhead, `playback_finished` to know when the
+// piece has drained, then `play_stop` to close the device and free the handle.
+struct Playback;  // opaque; defined in audio.cpp
+
+Playback* play_start(const music::Music& m, music::MusicId root,
+                     const AudioOptions& opt, std::string& err);
+double playback_seconds(const Playback* p);        // current playhead, seconds
+double playback_total_seconds(const Playback* p);  // total length, seconds
+bool   playback_finished(const Playback* p);       // audio fully drained?
+void   play_stop(Playback* p);                     // stop device + free handle
+
+// transport controls (for the visualizer): pause holds the cursor + emits silence;
+// seek jumps the playhead (clamped to [0, total]).
+void   playback_set_paused(Playback* p, bool paused);
+bool   playback_paused(const Playback* p);
+void   playback_seek(Playback* p, double seconds);
+
 } // namespace calliope::backend

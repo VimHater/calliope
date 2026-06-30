@@ -69,6 +69,29 @@ function(calliope_add_audio tgt)
         Threads::Threads ${CMAKE_DL_LIBS} m)
 endfunction()
 
+# Live visualizer (raylib). Separate binary `calliopev`. Needs the prebuilt raylib
+# AND the audio backend (it drives playback). The visualizer uses only raylib's
+# *graphics* — never its audio — so libraylib.a's bundled-miniaudio object is never
+# pulled, and our miniaudio_impl provides the ma_* symbols (no duplicate-symbol clash).
+option(CALLIOPE_VISUAL "Build the raylib live visualizer (calliopev)" ON)
+set(CALLIOPE_RAYLIB_DIR "${CMAKE_SOURCE_DIR}/third_party/libs/raylib")
+if(CALLIOPE_VISUAL AND (NOT CALLIOPE_AUDIO OR NOT EXISTS "${CALLIOPE_RAYLIB_DIR}/linux/libraylib.a"))
+    message(WARNING "CALLIOPE_VISUAL=ON but raylib prebuilt or the audio backend is "
+                    "unavailable; disabling the visualizer.")
+    set(CALLIOPE_VISUAL OFF)
+endif()
+
+function(calliope_add_visual tgt)
+    if(NOT CALLIOPE_VISUAL)
+        return()
+    endif()
+    target_include_directories(${tgt} PRIVATE ${CALLIOPE_RAYLIB_DIR}/include)
+    # raylib (graphics only) + the X11/GL system libs its static build needs.
+    target_link_libraries(${tgt} PRIVATE
+        ${CALLIOPE_RAYLIB_DIR}/linux/libraylib.a
+        GL X11 Xrandr Xinerama Xi Xcursor m pthread dl rt)
+endfunction()
+
 add_executable(calliope
     ./src/compiler/calliope.cpp
     src/compiler/helper.cpp
@@ -117,6 +140,27 @@ if(MSVC)
     target_compile_options(calliopei PRIVATE /W4)
 else()
     target_compile_options(calliopei PRIVATE -Wall -Wextra)
+endif()
+
+# --- visualizer: a separate binary that plays + draws a synced raylib window ----
+if(CALLIOPE_VISUAL)
+    add_executable(calliopev
+        src/compiler/visualizer.cpp
+        src/compiler/helper.cpp
+        ${CALLIOPE_CORE}
+    )
+    target_include_directories(calliopev PRIVATE src/compiler)
+    target_compile_definitions(calliopev PRIVATE
+        CALLIOPE_PRELUDE_PATH="${CALLIOPE_STDLIB_DIR}/prelude.cal"
+        CALLIOPE_SOUNDFONT_DIR="${CALLIOPE_SOUNDFONT_DIR}"
+        CALLIOPE_FONT_PATH="${CMAKE_SOURCE_DIR}/third_party/fonts/ZedMonoNerdFontMono-Regular.ttf")
+    calliope_add_audio(calliopev)   # synthesis + the non-blocking play_start handle
+    calliope_add_visual(calliopev)  # raylib graphics
+    if(MSVC)
+        target_compile_options(calliopev PRIVATE /W4)
+    else()
+        target_compile_options(calliopev PRIVATE -Wall -Wextra)
+    endif()
 endif()
 
 # --- tests (separate binary; does not link the main driver) ---------------

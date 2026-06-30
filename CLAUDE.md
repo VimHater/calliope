@@ -65,7 +65,10 @@ Frontend first cut exists; nothing executes music yet.
   into a flat list of absolute-timed `TimedNote`s in **exact Rational seconds** (each
   Control's tempo baked in, so per-region / polytempo works), with pitch collapsed to
   a MIDI key (`semitones + 12`, clamped) and a per-note velocity. A minimal stand-in
-  for the score IR; both `midi` and `audio` source notes from it.
+  for the score IR; both `midi` and `audio` source notes from it. **`flatten_voices`**
+  is a sibling that splits the top-level `:=:` (Par) spine into one note list per
+  **voice** — each collected with the enclosing tempo/meter context, chords (inner
+  Pars) left intact — for the visualizer's per-voice DAW rows.
 - `src/compiler/backend/midi.{hpp,cpp}` — **MIDI backend** (`calliope::backend
   ::write_midi`): turns `flatten`'s notes into a time-sorted note-on/off stream and
   writes a format-0 Standard MIDI File. 480 ticks/quarter; seconds → ticks at a fixed
@@ -91,13 +94,37 @@ Frontend first cut exists; nothing executes music yet.
   via `cli::play` — `calliope` (the compiler) does not play, only writes files. The audio
   backend is now linked into **both** `calliope` and `calliopei` (CMake
   `calliope_add_audio`); `miniaudio_impl.cpp` keeps the device-I/O layer (only the
-  resource manager is stripped). Real-time per-note synthesis + **live visualization
-  are TODO** (see `backend/visualize.hpp`).
-- `src/compiler/backend/visualize.hpp` — **TODO stub** for a **raylib** window that
-  draws the score in sync with `play` (shares `flatten`'s timed notes). Two planned
-  modes: `VizMode::Daw` (piano-roll / multi-track, moving playhead) and
-  `VizMode::Piano` (keys light as notes sound). Raylib prebuilts already vendored
-  (`third_party/libs/raylib`); a future `CALLIOPE_VISUAL` option compiles + links it.
+  resource manager is stripped). `play` also has a **non-blocking variant** — an
+  opaque **`Playback`** handle (`play_start` → poll `playback_seconds` /
+  `playback_finished` → `play_stop`) so another loop (a raylib window) can run while
+  audio streams; `play` itself is now a thin blocking wrapper over it. The handle also
+  has **transport controls** — `playback_set_paused` (cursor freezes + silence) and
+  `playback_seek` (a seek request honoured atomically inside the device callback).
+- **`src/compiler/visualizer.cpp` — the `calliopev` live visualizer** (a **separate
+  binary**). Reuses the compiler API: `driver::compile` a `.cal`, `backend::flatten`
+  `main` to timed notes, `backend::play_start` for audio, then a **raylib** window
+  synced to the audio playhead — a DAW view (default; **one lane per staff/hand** —
+  the top-level `:=:` branches from `backend::flatten_voices`, grouped by line-name
+  base from `main`'s AST so a grand-staff piano's sub-voices (`leftHand`/`leftHand2`/…)
+  merge into one lane; each lane a dense mini piano-roll (rows = the voice's distinct
+  pitches, lane height ∝ that count), bars **labelled with note names**) and a piano view
+  (`--mode piano`, Tab toggles) with a **slim keyboard** and
+  **Synthesia-style notes falling** from the top onto their keys. Text uses the
+  **bundled Zed Mono font** (`CALLIOPE_FONT_PATH`, falls back to raylib's default).
+  **Resizable window** (drawn to the live size each frame) + **transport/zoom
+  controls**: Space pause, H/L (or ←/→) seek, J/K (or ↓/↑) zoom the DAW; stays open
+  after the audio drains so it can be scrubbed/replayed.
+  Built only with **`CALLIOPE_VISUAL`** (needs the
+  vendored raylib prebuilt + the audio backend; `calliope_add_visual`). It uses only
+  raylib's *graphics*, never its bundled audio, so libraylib.a's miniaudio object is
+  never pulled (no duplicate-`ma_*` clash with `miniaudio_impl.cpp`). **Rendering the
+  visualization to a video file is a separate, later concern — `backend/visualize.hpp`
+  stays a stub for that.**
+- `src/compiler/backend/visualize.hpp` — **TODO stub**, now reserved for the
+  **offline path**: rendering a visualization to a **video file** (shares `flatten`'s
+  timed notes + the `VizMode` enum). The *live* window already ships as `calliopev`
+  (above); this header is for the not-yet-built video export. Raylib prebuilts vendored
+  (`third_party/libs/raylib`).
 - `src/compiler/calliopei.cpp` — `calliopei`: the **interpreter / audio player**.
   `calliopei file.cal` runs a file = **plays `main` live** (`--debug` prints its
   Music IR instead); `calliopei` with no args starts a REPL.
@@ -371,6 +398,7 @@ Two IRs, designed independently (spec §13):
 src/compiler/
   compiler.cpp        `calliope` CLI: arg parsing → driver → cli::emit_output
   calliopei.cpp       `calliopei` CLI: run a file or REPL session
+  visualizer.cpp      `calliopev` CLI: compile + play + draw a synced raylib window
   helper.{hpp,cpp}    cli:: host helpers (read_file/prelude_path/print_errors,
                       dumps, Emit + backend dispatch) shared by both entry points
   core/
@@ -429,6 +457,7 @@ cmake --build build
 ./build/calliope file.cal        # emit Music IR of `main` (see docs/README.md)
 ./build/calliopei file.cal       # interpret a file (prints main's IR)
 ./build/calliopei                # no args: interactive REPL
+./build/calliopev file.cal       # play + visualize (raylib; --mode piano, Tab toggles)
 ctest --test-dir build           # or run ./build/calliope_tests directly
 ```
 
